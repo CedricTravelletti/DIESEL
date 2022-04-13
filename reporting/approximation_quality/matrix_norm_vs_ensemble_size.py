@@ -38,7 +38,7 @@ def main():
     
     n_reps = 50
     sizes = np.arange(10, 1000, 50)
-    sizes = np.concatenate(sizes, [1500, 2000, 3000, 10000])
+    sizes = np.concatenate([sizes, [1500, 2000, 3000, 10000]])
     for ens_size in sizes:
         for rep in range(n_reps):
             print("repetition: {}".format(rep))
