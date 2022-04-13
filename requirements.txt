@@ -1,0 +1,10 @@
+numpy
+cython
+scipy
+scikit-learn
+pandas
+xarray
+dask
+dask-distance
+netCDF4
+cartopy
