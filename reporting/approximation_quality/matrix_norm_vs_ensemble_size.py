@@ -36,9 +36,9 @@ def main():
     
     results= pd.DataFrame(columns=['Ensemble size','Repetition', 'Error (Frobenius norm)'])
     
-    n_reps = 50
+    n_reps = 100
     sizes = np.arange(10, 1000, 50)
-    sizes = np.concatenate([sizes, [1500, 2000, 3000, 10000]])
+    sizes = np.concatenate([sizes, [1500, 2000, 3000, 4000]])
     for ens_size in sizes:
         for rep in range(n_reps):
             print("repetition: {}".format(rep))
@@ -83,6 +83,9 @@ def main():
     
     ax = sns.lineplot('Ensemble size', 'Error (Frobenius norm)', data=results, 
             palette=my_palette)
+
+    # Logarithmic scale.
+    ax.set_yscale("log")
     
     plt.savefig("error_vs_ens_size", bbox_inches="tight", pad_inches=0.1, dpi=400)
     plt.show()
