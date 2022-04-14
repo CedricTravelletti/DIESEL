@@ -1,0 +1,2 @@
+from .covariance_plotting import compute_variogram
+from .covariance_plotting import plot_variogram
