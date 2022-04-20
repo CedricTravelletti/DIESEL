@@ -35,7 +35,7 @@ def plot_variogram(dist_mat, cov_mat, n_bins, outfile=None):
     bins_midpts, bins_means, bins_stds = compute_variogram(
             dist_mat, cov_mat, n_bins)
     plt.plot(bins_midpts, bins_means)
-    plt.fill_between(bins_midpts, bins_means - 3*bins_stds, bins_midpts + 3*bins_stds, alpha=.2)
+    plt.fill_between(bins_midpts, bins_means - 3*bins_stds, bins_means + 3*bins_stds, alpha=.2)
 
     if outfile is not None:
         plt.savefig(outfile, bbox_inches="tight", pad_inches=0.1, dpi=400)
