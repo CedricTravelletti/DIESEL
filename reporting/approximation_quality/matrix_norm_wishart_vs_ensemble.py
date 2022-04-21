@@ -36,18 +36,19 @@ def main():
     results= pd.DataFrame(columns=['Degrees of Freedom','Repetition', 
         'Error (empirical)', 'Error (bayesian)'])
     
-    # Replicate analysis 100 times.
-    n_reps = 100
-    dofs = np.linspace(900, 1e5, 20)
+    # Replicate analysis 50 times.
+    n_reps = 50
+    dofs = np.linspace(900, 4e3, 20)
     for dof in dofs:
+        # Create inverse Wishart prior.
+        # TODO: This time use a well-specified prior.
+        prior = ds.estimation.InverseWishartPrior(lazy_covariance_matrix, dof)
+
         for rep in range(n_reps):
             print("repetition: {}".format(rep))
             # Sample ensemble.
             ensembles = sampler.sample(20)
             ensembles = client.compute(ensembles).result()
-
-            # Create inverse Wishart prior.
-            prior = ds.estimation.InverseWishartPrior(scale_matrix, dof)
 
             # Estimate covariance using both approaches
             lazy_empirical_cov = ds.estimation.empirical_covariance(ensembles)
@@ -66,10 +67,8 @@ def main():
                             }, ignore_index=True)
     
     # Save at the end.
-    results.to_pickle("error_empirical_vs_bayesian_results.pkl")
+    results.to_pickle("error_empirical_vs_bayesian_results_well_spec.pkl")
     
-    results = pd.read_pickle("./error_empirical_vs_bayesian_results.pkl")
-
     # Plot results.
     import matplotlib.pyplot as plt
     import seaborn as sns
@@ -99,7 +98,7 @@ def main():
     ax.fill_between(results['Degrees of Freedom'], mean_empirical_error - 2*std_empirical_error, mean_empirical_error + 2*std_empirical_error,
             color='r', alpha=.2)
     
-    plt.savefig("error_empirical_vs_bayesian", bbox_inches="tight", pad_inches=0.1, dpi=400)
+    plt.savefig("error_empirical_vs_bayesian_well_spec", bbox_inches="tight", pad_inches=0.1, dpi=400)
     plt.show()
 
 if __name__ == "__main__":
