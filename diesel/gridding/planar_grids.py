@@ -28,6 +28,7 @@ class SquareGrid:
         self.X, self.Y = np.meshgrid(
                 np.linspace(0, 1, n_pts_1d), np.linspace(0, 1, n_pts_1d), indexing='ij')
         grid_pts = np.stack([self.X.ravel(), self.Y.ravel()], axis=1)
+        grid_pts = np.squeeze(grid_pts)
     
         grid_pts = da.from_array(grid_pts)
         grid_pts = grid_pts.rechunk(block_size_limit=block_size)

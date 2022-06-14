@@ -1,1 +1,1 @@
-from .kernels import matern32, distance_matrix
+from .kernels import matern32, pairwise_euclidean

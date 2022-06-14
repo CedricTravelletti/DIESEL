@@ -5,10 +5,12 @@ import numpy as np
 import dask
 import dask.array as da
 import dask_distance
+import dask_distance._utils as utils
 
 
-def distance_matrix(coords):
-    return dask_distance.euclidean(coords, coords)
+# @utils._broadcast_uv_wrapper
+def pairwise_euclidean(coords1, coords2):
+    return dask_distance.euclidean(coords1, coords2)
 
 def matern32(coords, lambda0):
     """ Matern 3/2 covariance kernel.
@@ -24,7 +26,7 @@ def matern32(coords, lambda0):
         Pairwise covariance matrix.
 
     """
-    dists = dask_distance.euclidean(coords, coords)
+    dists = pairwise_euclidean(coords, coords)
     res = da.multiply(
             1 + (np.sqrt(3) / lambda0) * dists,
             da.exp(-(np.sqrt(3) / lambda0) * dists))
