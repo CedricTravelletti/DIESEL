@@ -2,6 +2,7 @@
 
 """
 import numpy as np
+import matplotlib.pyplot as plt
 import dask.array as da
 
 
@@ -50,3 +51,16 @@ class SquareGrid:
 
     def list_to_mesh(self, list_vals):
         return list_vals.reshape(self.X.shape[0], self.Y.shape[0])
+
+    def plot_vals(self, vals_list, ax, points=None, vmin=None, vmax=None):
+        dx = (self.X[1, 0]-self.X[0, 0])/2.
+        dy = (self.Y[0, 1]-self.Y[0, 0])/2
+        extent = extent = [self.X[0, 0]-dx, self.X[-1, 0]+dx, self.Y[0, 0]-dy, self.Y[0, -1]+dy]
+
+        ax.imshow(self.list_to_mesh(vals_list),
+                cmap='jet', extent=extent,
+                vmin=vmin, vmax=vmax)
+
+        if points is not None:
+            ax.scatter(points[:, 0], points[:, 1], c='red')
+        return ax
