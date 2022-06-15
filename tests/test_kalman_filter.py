@@ -4,6 +4,7 @@ import dask.array as da
 from dask.distributed import Client
 import diesel as ds
 from diesel.kalman_filtering import EnsembleKalmanFilter
+from diesel.estimation import localize_covariance
 from diesel.utils import compute_RE_score
 
 
@@ -40,10 +41,10 @@ def main():
     ensembles = [ensemble.compute() for ensemble in ensembles]
 
     # Estimate covariance using empirical covariance of the ensemble.
-    estimated_cov_lazy = ds.estimation.empirical_covariance(ensembles)
+    raw_estimated_cov_lazy = ds.estimation.empirical_covariance(ensembles)
 
     # Persist the covariance on the cluster.
-    estimated_cov = client.persist(estimated_cov_lazy)
+    raw_estimated_cov = client.persist(raw_estimated_cov_lazy)
 
     # Prepare some data by randomly selecting some points.
     n_data = 60
@@ -60,29 +61,42 @@ def main():
     # Plot data location.
     fig, ax = plt.subplots()
     grid.plot_vals(ground_truth, ax, points=grid_pts[data_inds])
-    plt.show()
 
     # Compute ensemble mean.
     mean = da.mean(da.stack(ensembles, axis=1), axis=1)
 
     # Run data assimilation using an ensemble Kalman filter.
     my_filter = EnsembleKalmanFilter()
-    mean_updated = my_filter.update_mean(mean, G, y, data_std, estimated_cov)
+    mean_updated = my_filter.update_mean(mean, G, y, data_std, raw_estimated_cov)
 
     fig, axs = plt.subplots(1, 2)
     grid.plot_vals(ground_truth, axs[0], points=grid_pts[data_inds])
     grid.plot_vals(mean_updated.compute(), axs[1], points=grid_pts[data_inds])
-    plt.savefig("kalman_filter_comparison", bbox_inches="tight", pad_inches=0.1, dpi=600)
-    plt.show()
+    plt.savefig("compare_reconstruction_raw", bbox_inches="tight", pad_inches=0.1, dpi=400)
 
     fig, ax = plt.subplots()
     RE_score = compute_RE_score(mean, mean_updated, ground_truth)
     ax = grid.plot_vals(RE_score.compute(), ax, points=grid_pts[data_inds],
             vmin=-10, vmax=1)
-    plt.show()
+
+    # Compare with localized version.
+    # Perform covariance localization (use base covariance to localize).
+    loc_estimated_cov = localize_covariance(raw_estimated_cov, lazy_covariance_matrix)
+    mean_updated_loc = my_filter.update_mean(mean, G, y, data_std, loc_estimated_cov)
+
+    fig, axs = plt.subplots(1, 2)
+    grid.plot_vals(ground_truth, axs[0], points=grid_pts[data_inds])
+    grid.plot_vals(mean_updated_loc.compute(), axs[1], points=grid_pts[data_inds])
+    plt.savefig("compare_reconstruction_loc", bbox_inches="tight", pad_inches=0.1, dpi=400)
+
+    # Also run with the true covariance.
+    mean_updated_exact = my_filter.update_mean(mean, G, y, data_std, lazy_covariance_matrix)
+
+    fig, axs = plt.subplots(1, 2)
+    grid.plot_vals(ground_truth, axs[0], points=grid_pts[data_inds])
+    grid.plot_vals(mean_updated_exact.compute(), axs[1], points=grid_pts[data_inds])
+    plt.savefig("compare_reconstruction_exact", bbox_inches="tight", pad_inches=0.1, dpi=400)
 
     
-
-
 if __name__ == "__main__":
     main()

@@ -2,7 +2,6 @@
 
 """
 import numpy as np
-import matplotlib.pyplot as plt
 import dask.array as da
 
 
@@ -62,5 +61,5 @@ class SquareGrid:
                 vmin=vmin, vmax=vmax)
 
         if points is not None:
-            ax.scatter(points[:, 0], points[:, 1], c='red')
+            ax.scatter(points[:, 0], points[:, 1], c='black', s=10, marker='*')
         return ax
