@@ -54,9 +54,11 @@ class SquareGrid:
     def plot_vals(self, vals_list, ax, points=None, vmin=None, vmax=None):
         dx = (self.X[1, 0]-self.X[0, 0])/2.
         dy = (self.Y[0, 1]-self.Y[0, 0])/2
-        extent = extent = [self.X[0, 0]-dx, self.X[-1, 0]+dx, self.Y[0, 0]-dy, self.Y[0, -1]+dy]
+        extent = extent = [
+                self.X[0, 0]-dx, self.X[-1, 0]+dx,
+                self.Y[0, -1]+dy, self.Y[0, 0]-dy]
 
-        ax.imshow(self.list_to_mesh(vals_list),
+        ax.imshow(self.list_to_mesh(vals_list).T,
                 cmap='jet', extent=extent,
                 vmin=vmin, vmax=vmax)
 
