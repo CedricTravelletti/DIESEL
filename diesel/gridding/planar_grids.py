@@ -3,6 +3,7 @@
 """
 import numpy as np
 import dask.array as da
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 class SquareGrid:
@@ -51,17 +52,23 @@ class SquareGrid:
     def list_to_mesh(self, list_vals):
         return list_vals.reshape(self.X.shape[0], self.Y.shape[0])
 
-    def plot_vals(self, vals_list, ax, points=None, vmin=None, vmax=None):
+    def plot_vals(self, vals_list, ax, points=None, vmin=None, vmax=None,
+            fig=None, colorbar=False):
         dx = (self.X[1, 0]-self.X[0, 0])/2.
         dy = (self.Y[0, 1]-self.Y[0, 0])/2
         extent = extent = [
                 self.X[0, 0]-dx, self.X[-1, 0]+dx,
                 self.Y[0, -1]+dy, self.Y[0, 0]-dy]
 
-        ax.imshow(self.list_to_mesh(vals_list).T,
+        im = ax.imshow(self.list_to_mesh(vals_list).T,
                 cmap='jet', extent=extent,
                 vmin=vmin, vmax=vmax)
 
         if points is not None:
             ax.scatter(points[:, 0], points[:, 1], c='black', s=10, marker='*')
+        if colorbar is True:
+            # Add colorbar
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes('right', size='5%', pad=0.05)
+            fig.colorbar(im, cax=cax, orientation='vertical')
         return ax
