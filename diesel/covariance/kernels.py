@@ -54,3 +54,44 @@ class matern32:
                 1 + np.sqrt(3) * dists,
                 da.exp(-np.sqrt(3) * dists))
         return res
+
+class squared_exponential:
+    """ Squared exponential covariance kernel.
+
+    """
+    def __init__(self, lengthscales):
+        """ Build squared_exponential kernel.
+
+        Parameters
+        ----------
+        lengthscales: array-like (n_dims)
+            Vector of lengthscales for each individual dimension.
+
+        """
+        self.lengthscales = lengthscales
+
+    def covariance_matrix(self, coords1, coords2, lengthscales=None):
+        """ Compute covariance matrix between two sets of points.
+
+        Parameters
+        ----------
+        coords1: (m, n_dims) dask.array or Future
+            Point coordinates.
+        coords2: (n, n_dims) dask.array or Future
+            Point coordinates.
+        lengthscales_2: array-like (n_dims), defaults to None.
+            Can be used to override using the lengthscales of the kernel and use 
+            different ones.
+    
+        Returns
+        -------
+        covs: (m, n) delayed dask.array
+            Pairwise covariance matrix.
+    
+        """
+        if lengthscales is None:
+            lengthscales = self.lengthscales
+
+        dists = dask_distance.seuclidean(coords1, coords2, lengthscales**2)
+        res = da.exp(- (1 / 2) * dists**2)
+        return res

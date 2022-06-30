@@ -3,7 +3,27 @@
 """
 import numpy as np
 import dask.array as da
+import matplotlib.pyplot as plt
+import matplotlib.font_manager
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+import seaborn as sns
+
+
+sns.set()
+sns.set_style("white")
+# plt.rcParams["font.family"] = "Helvetica"
+plt.rcParams["font.family"] = ["Arial"]
+plot_params = {
+        'font.size': 10, 'font.style': 'normal',
+        'axes.labelsize': 'small',
+        'axes.titlesize':'small',
+        'legend.fontsize': 'small',
+        'xtick.labelsize': 'small',
+        'ytick.labelsize': 'small',
+        }
+plt.rcParams.update(plot_params)
+plt.rc('xtick', labelsize=5)
+plt.rc('ytick', labelsize=5)
 
 
 class SquareGrid:
