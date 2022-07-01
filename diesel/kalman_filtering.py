@@ -72,13 +72,15 @@ class EnsembleKalmanFilter:
         _, inv = cholesky_invert(to_invert)
         return self._update_mean(mean, G, y, cov_pushfwd, inv)
 
-    def _update_ensemble(self, ensemble, G, data_std, cov_pushfwd, sqrt):
+    def _update_anomalies(self, mean, ensemble, G, data_std, cov_pushfwd, sqrt):
         """ Helper function for updating the ensemble members over a single period (step).
         This function assumes that the compute intensive intermediate matrices 
         have already been computed.
 
         Parameters
         ----------
+        mean: dask.array (m)
+            Vector of mean elements.
         ensemble: dask.array (n_members, m)
             Ensemble members (one vector per member).
         G: dask.array (n, m)
@@ -92,9 +94,14 @@ class EnsembleKalmanFilter:
 
         Returns
         -------
-        update_members: dask.array (n_members, m) (lazy)
+        anomalies_updated: dask.array (n_members, m) (lazy)
+            Updated anomalies (deviations from mean). Have to add 
+            the updated mean to obtain updated ensemble members.
 
         """
+        # Work with anomalies.
+        anomalies = ensemble - mean.reshape(-1)[None, :]
+
         # First compute the inverse of the sqrt.
         inv_sqrt = da.linalg.inv(sqrt)
 
@@ -105,11 +112,11 @@ class EnsembleKalmanFilter:
                 matmul(inv_sqrt.T, inv_2))
 
         # Compute predictions for each member using batched matrix multiplication.
-        base_pred = matmul(G, ensemble[:, :, None]) # Resulting shape (n_members, m, 1)
-        ensemble_updated = ensemble[:, :, None] - matmul(kalman_gain_tilde, base_pred)
+        base_pred = matmul(G, anomalies[:, :, None]) # Resulting shape (n_members, m, 1)
+        anomalies_updated = anomalies[:, :, None] - matmul(kalman_gain_tilde, base_pred)
 
         # We remove the last dimension before returning.
-        return ensemble_updated.squeeze(-1)
+        return anomalies_updated.squeeze(-1)
 
     def update_ensemble(self, mean, ensemble, G, y, data_std, cov):
         """ Update an ensemble over a single period (step).
@@ -141,7 +148,14 @@ class EnsembleKalmanFilter:
         to_invert = matmul(G, cov_pushfwd) + data_cov
 
         sqrt, inv = cholesky_invert(to_invert)
-        return self._update_mean(mean, G, y, cov_pushfwd, inv), self._update_ensemble(ensemble, G, data_std, cov_pushfwd, sqrt)
+        anomalies_updated = self._update_anomalies(
+                mean, ensemble, G, data_std, cov_pushfwd, sqrt)
+        mean_updated = self._update_mean(mean, G, y, cov_pushfwd, inv)
+
+        # Add the mean to get ensemble from anomalies.
+        ensemble_updated = mean_updated.reshape(-1)[None, :] + anomalies_updated
+
+        return mean_updated, ensemble_updated
 
     def update_mean_sequential(self, mean, G, y, data_std, cov):
         """ Update the mean over a single period (step) by assimilating the 
