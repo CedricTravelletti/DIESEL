@@ -72,7 +72,8 @@ class SquareGrid:
     def list_to_mesh(self, list_vals):
         return list_vals.reshape(self.X.shape[0], self.Y.shape[0])
 
-    def plot_vals(self, vals_list, ax, points=None, vmin=None, vmax=None,
+    def plot_vals(self, vals_list, ax, points=None, points_color='black',
+            vmin=None, vmax=None,
             fig=None, colorbar=False):
         dx = (self.X[1, 0]-self.X[0, 0])/2.
         dy = (self.Y[0, 1]-self.Y[0, 0])/2
@@ -85,7 +86,7 @@ class SquareGrid:
                 vmin=vmin, vmax=vmax)
 
         if points is not None:
-            ax.scatter(points[:, 0], points[:, 1], c='black', s=10, marker='*')
+            ax.scatter(points[:, 0], points[:, 1], c=points_color, s=10, marker='*')
         if colorbar is True:
             # Add colorbar
             divider = make_axes_locatable(ax)

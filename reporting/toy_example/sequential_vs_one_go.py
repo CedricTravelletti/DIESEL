@@ -9,7 +9,7 @@ import dask.array as da
 from dask.distributed import Client
 import diesel as ds
 from diesel.kalman_filtering import EnsembleKalmanFilter
-from diesel.utils import compute_RE_score
+from diesel.scoring import compute_RE_score, compute_CRPS
 from diesel.estimation import localize_covariance
 
 
@@ -89,7 +89,7 @@ def main():
         # Run data assimilation using an ensemble Kalman filter.
         my_filter = EnsembleKalmanFilter()
 
-        mean_updated_one_go_raw, _ = my_filter.update_ensemble(mean, ensembles, G, y, data_std, raw_estimated_cov)
+        mean_updated_one_go_raw, ensemble_updated_one_go_raw = my_filter.update_ensemble(mean, ensembles, G, y, data_std, raw_estimated_cov)
         mean_updated_one_go_loc, ensemble_updated_one_go_loc = my_filter.update_ensemble(mean, ensembles, G, y, data_std, loc_estimated_cov)
 
         localizer_loc = lambda x: localize_covariance(ds.estimation.empirical_covariance(x), scaled_covariance_matrix)
@@ -102,6 +102,7 @@ def main():
                 covariance_estimator=localizer_loc
                 )
 
+        # Compare sequential and one-go.
         fig, axs = plt.subplots(2, 3)
         grid.plot_vals(ground_truth, axs[0, 0], points=grid_pts[data_inds], vmin=-3, vmax=3)
         axs[0, 0].title.set_text('ground truth')
@@ -125,6 +126,120 @@ def main():
         axs[1, 2].title.set_text('sequential (localization)')
 
         plt.savefig("sequential_vs_one_go", bbox_inches="tight", pad_inches=0.1, dpi=400)
+        plt.show()
+
+        # Now compare scores.
+        RE_score_one_go_raw = compute_RE_score(mean, mean_updated_one_go_raw, ground_truth)
+        RE_score_one_go_loc = compute_RE_score(mean, mean_updated_one_go_loc, ground_truth)
+        CRPS_one_go_raw, acc_one_go_raw, spread_one_go_raw = compute_CRPS(
+                ensemble_updated_one_go_raw, ground_truth)
+        CRPS_one_go_loc, acc_one_go_loc, spread_one_go_loc = compute_CRPS(
+                ensemble_updated_one_go_loc, ground_truth)
+
+        # Normalize.
+        acc_one_go_raw, acc_one_go_loc = (1 / n_ensembles) * acc_one_go_raw, (1 / n_ensembles) * acc_one_go_loc
+        spread_one_go_raw, spread_one_go_loc = (1 / (2 * n_ensembles**2)) * spread_one_go_raw, (1 / (2 * n_ensembles**2)) * spread_one_go_loc
+
+        fig, axs = plt.subplots(3, 3)
+        grid.plot_vals(ground_truth, axs[0, 0], points=grid_pts[data_inds], vmin=-3, vmax=3)
+        axs[0, 0].title.set_text('ground truth')
+        axs[0, 0].set_xticks([])
+
+        grid.plot_vals(mean_updated_one_go_raw.compute(), axs[0, 1],
+                points=grid_pts[data_inds], vmin=-3, vmax=3)
+        axs[0, 1].title.set_text('all-at-once (no localization)')
+        axs[0, 1].set_xticks([])
+
+        grid.plot_vals(mean_updated_one_go_loc.compute(), axs[0, 2],
+                points=grid_pts[data_inds], vmin=-3, vmax=3)
+        axs[0, 2].title.set_text('all-at-once (localization)')
+        axs[0, 2].set_xticks([])
+
+        grid.plot_vals(CRPS_one_go_raw.compute(), axs[1, 0], vmin=0, vmax=3)
+        axs[1, 0].title.set_text('CRPS raw')
+
+        grid.plot_vals(acc_one_go_raw.compute(), axs[1, 1],
+                points=grid_pts[data_inds],
+                vmin=0, vmax=2.5,
+                points_color='magenta')
+        axs[1, 1].title.set_text('acc raw')
+
+        grid.plot_vals(spread_one_go_raw.compute(), axs[1, 2],
+                points=grid_pts[data_inds],
+                points_color='magenta')
+        axs[1, 2].title.set_text('spread raw')
+
+        grid.plot_vals(CRPS_one_go_loc.compute(), axs[2, 0], vmin=0, vmax=3)
+        axs[2, 0].title.set_text('CRPS loc')
+
+        grid.plot_vals(acc_one_go_loc.compute(), axs[2, 1],
+                points=grid_pts[data_inds],
+                vmin=0, vmax=2.5,
+                points_color="magenta")
+        axs[2, 1].title.set_text('accuray loc')
+
+        grid.plot_vals(spread_one_go_loc.compute(), axs[2, 2],
+                points=grid_pts[data_inds],
+                points_color='magenta')
+        axs[2, 2].title.set_text('spread loc')
+
+        plt.savefig("scores_sequential_vs_one_go", bbox_inches="tight", pad_inches=0.1, dpi=400)
+        plt.show()
+
+        # Plot members.
+        fig, axs = plt.subplots(3, 4)
+
+        grid.plot_vals(ground_truth, axs[0, 0], points=grid_pts[data_inds], vmin=-3, vmax=3)
+        axs[0, 0].title.set_text('ground truth')
+        axs[0, 0].set_xticks([])
+        grid.plot_vals(ensembles[0, :].compute(), axs[0, 1],
+                vmin=-3, vmax=3)
+        axs[0, 1].title.set_text('ensemble 0')
+        axs[0, 1].set_xticks([])
+        grid.plot_vals(ensembles[1, :].compute(), axs[0, 2],
+                vmin=-3, vmax=3)
+        axs[0, 2].title.set_text('ensemble 1')
+        axs[0, 2].set_xticks([])
+        grid.plot_vals(ensembles[2, :].compute(), axs[0, 3],
+                vmin=-3, vmax=3)
+        axs[0, 3].title.set_text('ensemble 2')
+        axs[0, 3].set_xticks([])
+
+        grid.plot_vals(mean_updated_one_go_raw, axs[1, 0],
+                points=grid_pts[data_inds], vmin=-3, vmax=3)
+        axs[1, 0].title.set_text('mean updated raw')
+        axs[1, 0].set_xticks([])
+        grid.plot_vals(ensemble_updated_one_go_raw[0, :].compute(), axs[1, 1],
+                vmin=-3, vmax=3)
+        axs[1, 1].title.set_text('ensemble 0 raw')
+        axs[1, 1].set_xticks([])
+        grid.plot_vals(ensemble_updated_one_go_raw[1, :].compute(), axs[1, 2],
+                vmin=-3, vmax=3)
+        axs[1, 2].title.set_text('ensemble 1 raw')
+        axs[1, 2].set_xticks([])
+        grid.plot_vals(ensemble_updated_one_go_raw[2, :].compute(), axs[1, 3],
+                vmin=-3, vmax=3)
+        axs[1, 3].title.set_text('ensemble 2 raw')
+        axs[1, 3].set_xticks([])
+
+        grid.plot_vals(mean_updated_one_go_loc, axs[2, 0],
+                points=grid_pts[data_inds], vmin=-3, vmax=3)
+        axs[2, 0].title.set_text('mean updated loc')
+        axs[2, 0].set_xticks([])
+        grid.plot_vals(ensemble_updated_one_go_loc[0, :].compute(), axs[2, 1],
+                vmin=-3, vmax=3)
+        axs[2, 1].title.set_text('ensemble 0 loc')
+        axs[2, 1].set_xticks([])
+        grid.plot_vals(ensemble_updated_one_go_loc[1, :].compute(), axs[2, 2],
+                vmin=-3, vmax=3)
+        axs[2, 2].title.set_text('ensemble 1 loc')
+        axs[2, 2].set_xticks([])
+        grid.plot_vals(ensemble_updated_one_go_loc[2, :].compute(), axs[2, 3],
+                vmin=-3, vmax=3)
+        axs[2, 3].title.set_text('ensemble 2 loc')
+        axs[2, 3].set_xticks([])
+
+        plt.savefig("ensembles_sequential_vs_one_go", bbox_inches="tight", pad_inches=0.1, dpi=400)
         plt.show()
 
 

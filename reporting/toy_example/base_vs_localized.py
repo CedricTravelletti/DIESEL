@@ -69,7 +69,7 @@ def main():
         loc_estimated_cov = localize_covariance(raw_estimated_cov, lazy_covariance_matrix)
     
         # Prepare some data by randomly selecting some points.
-        n_data = 180
+        n_data = 500
         data_inds = np.random.choice(ground_truth.shape[0], n_data, replace=False)  
     
         #  Built observation operator.
