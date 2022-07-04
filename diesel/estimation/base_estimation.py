@@ -18,3 +18,9 @@ def empirical_covariance(ensemble):
 
     """
     return da.cov(ensemble, rowvar=False)
+
+def localize_covariance(base_cov, localization_matrix):
+    """ Performs covariance localization.
+
+    """
+    return base_cov * localization_matrix

@@ -5,27 +5,93 @@ import numpy as np
 import dask
 import dask.array as da
 import dask_distance
+import dask_distance._utils as utils
 
 
-def distance_matrix(coords):
-    return dask_distance.euclidean(coords, coords)
+# @utils._broadcast_uv_wrapper
+def pairwise_euclidean(coords1, coords2):
+    return dask_distance.euclidean(coords1, coords2)
 
-def matern32(coords, lambda0):
+class matern32:
     """ Matern 3/2 covariance kernel.
 
-    Parameters
-    ----------
-    coords: (n_pts, n_dims) dask.array or Future
-        Point coordinates.
+    """
+    def __init__(self, lengthscales):
+        """ Build Matern 3/2 kernel.
 
-    Returns
-    -------
-    covs: (n_pts, n_pts) delayed dask.array
-        Pairwise covariance matrix.
+        Parameters
+        ----------
+        lengthscales: array-like (n_dims)
+            Vector of lengthscales for each individual dimension.
+
+        """
+        self.lengthscales = lengthscales
+
+    def covariance_matrix(self, coords1, coords2, lengthscales=None):
+        """ Compute covariance matrix between two sets of points.
+
+        Parameters
+        ----------
+        coords1: (m, n_dims) dask.array or Future
+            Point coordinates.
+        coords2: (n, n_dims) dask.array or Future
+            Point coordinates.
+        lengthscales_2: array-like (n_dims), defaults to None.
+            Can be used to override using the lengthscales of the kernel and use 
+            different ones.
+    
+        Returns
+        -------
+        covs: (m, n) delayed dask.array
+            Pairwise covariance matrix.
+    
+        """
+        if lengthscales is None:
+            lengthscales = self.lengthscales
+
+        dists = dask_distance.seuclidean(coords1, coords2, lengthscales**2)
+        res = da.multiply(
+                1 + np.sqrt(3) * dists,
+                da.exp(-np.sqrt(3) * dists))
+        return res
+
+class squared_exponential:
+    """ Squared exponential covariance kernel.
 
     """
-    dists = dask_distance.euclidean(coords, coords)
-    res = da.multiply(
-            1 + (np.sqrt(3) / lambda0) * dists,
-            da.exp(-(np.sqrt(3) / lambda0) * dists))
-    return res
+    def __init__(self, lengthscales):
+        """ Build squared_exponential kernel.
+
+        Parameters
+        ----------
+        lengthscales: array-like (n_dims)
+            Vector of lengthscales for each individual dimension.
+
+        """
+        self.lengthscales = lengthscales
+
+    def covariance_matrix(self, coords1, coords2, lengthscales=None):
+        """ Compute covariance matrix between two sets of points.
+
+        Parameters
+        ----------
+        coords1: (m, n_dims) dask.array or Future
+            Point coordinates.
+        coords2: (n, n_dims) dask.array or Future
+            Point coordinates.
+        lengthscales_2: array-like (n_dims), defaults to None.
+            Can be used to override using the lengthscales of the kernel and use 
+            different ones.
+    
+        Returns
+        -------
+        covs: (m, n) delayed dask.array
+            Pairwise covariance matrix.
+    
+        """
+        if lengthscales is None:
+            lengthscales = self.lengthscales
+
+        dists = dask_distance.seuclidean(coords1, coords2, lengthscales**2)
+        res = da.exp(- (1 / 2) * dists**2)
+        return res

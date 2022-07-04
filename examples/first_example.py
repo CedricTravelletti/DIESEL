@@ -1,6 +1,7 @@
 import dask.array as da
 from dask.distributed import Client
 import diesel as ds
+import matplotlib.pyplot as plt
 
 
 def main():
@@ -13,7 +14,7 @@ def main():
     grid_pts = grid.grid_pts
     
     # Construct (lazy) covariance matrix.
-    lazy_covariance_matrix = ds.covariance.matern32(grid_pts, lambda0=0.2)
+    lazy_covariance_matrix = ds.covariance.matern32(grid_pts, lambda0=0.1)
     
     # Compute compressed SVD.
     svd_rank = 900 # Since our matrix is 900 * 900 this will be a full SVD.
@@ -25,6 +26,10 @@ def main():
     
     # Sample 16 ensemble members.
     ensembles = sampler.sample(16) # Note this is still lazy.
+
+    # Plot one ensemble.
+    plt.imshow(grid.list_to_mesh(ensembles[0]), cmap='jet')
+    plt.show()
     
     # Estimate covariance using empirical covariance of the ensemble.
     estimated_cov_lazy = ds.estimation.empirical_covariance(ensembles)
