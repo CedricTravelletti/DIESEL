@@ -35,6 +35,7 @@ def compute_CRPS(ensemble, reference):
     This scores evaluates how well a probabilistic forecast (given by an ensemble) 
     predicts a given reference. The CRPS is relative in the sense that it is used to 
     compare different forecasts, lower score being better.
+    The CRPS is a sum of a misfit term and a spread term. Here both are returned separately.
 
     See Jordan et al., Evaluating Probabilistic Forecasts with scoringRule (2018).
 
@@ -49,10 +50,49 @@ def compute_CRPS(ensemble, reference):
     -------
     CRPS: dask.array (m)
         Vector of CRPS scores at each location.
+    misfit: dask.array (m)
+        Vector of misfits (in the CRPS) at each location.
+    spread: dask.array (m)
+        Vector of spreads (in the CRPS) at each location.
 
     """
     n_members = ensemble.shape[0]
-    accuracy = da.fabs(ensemble - reference.reshape(-1)[None, :]).sum(axis=0)
-    spread = da.fabs(ensemble[None, :, :] - ensemble[:, None, :]).sum(axis=0).sum(axis=0)
-    CRPS = (1 / n_members) * accuracy - (1 / (2 * n_members**2)) * spread
-    return CRPS, accuracy, spread
+    misfit = (1 / n_members) * da.fabs(ensemble - reference.reshape(-1)[None, :]).sum(axis=0)
+    spread = (1 / (2 * n_members**2)) * da.fabs(
+            ensemble[None, :, :] - ensemble[:, None, :]).sum(axis=0).sum(axis=0)
+    CRPS =  misfit -  spread
+    return CRPS, misfit, spread
+
+def compute_energy_score(ensemble, reference):
+    """ Computes energy score (multivariate generalisation of the CRPS".
+    This scores evaluates how well a probabilistic forecast (given by an ensemble) 
+    predicts a given reference. The energy score is relative in the sense that it is used to 
+    compare different forecasts, lower score being better.
+    The energy score is a sum of a misfit term and a spread term. Here both are returned separately.
+
+    See Jordan et al., Evaluating Probabilistic Forecasts with scoringRule (2018).
+
+    Parameters
+    ----------
+    ensemble: dask.array (n_members, m)
+        Collection of prediction vectors.
+    reference: dask.array (m)
+        Ground truth to be reconstructed.
+
+    Returns
+    -------
+    energy_score: dask.array (1)
+        Energy score (scalar).
+    misfit: dask.array (1)
+        Misfit term of the energy score (scalar).
+    spread: dask.array (1)
+        Spread term of the energy score (scalar).
+
+    """
+    n_members = ensemble.shape[0]
+    misfit = (1 / n_members) * da.linalg.norm(
+            ensemble - reference.reshape(-1)[None, :], axis=1).sum(axis=0)
+    spread = (1 / (2 * n_members**2)) * da.linalg.norm(
+            ensemble[None, :, :] - ensemble[:, None, :], axis=2).sum(axis=0).sum(axis=0)
+    energy_score = misfit - spread
+    return energy_score, misfit, spread

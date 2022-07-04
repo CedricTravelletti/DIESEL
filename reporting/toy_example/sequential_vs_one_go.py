@@ -9,7 +9,7 @@ import dask.array as da
 from dask.distributed import Client
 import diesel as ds
 from diesel.kalman_filtering import EnsembleKalmanFilter
-from diesel.scoring import compute_RE_score, compute_CRPS
+from diesel.scoring import compute_RE_score, compute_CRPS, compute_energy_score
 from diesel.estimation import localize_covariance
 
 
@@ -131,14 +131,15 @@ def main():
         # Now compare scores.
         RE_score_one_go_raw = compute_RE_score(mean, mean_updated_one_go_raw, ground_truth)
         RE_score_one_go_loc = compute_RE_score(mean, mean_updated_one_go_loc, ground_truth)
-        CRPS_one_go_raw, acc_one_go_raw, spread_one_go_raw = compute_CRPS(
+        CRPS_one_go_raw, misfit_one_go_raw, spread_one_go_raw = compute_CRPS(
                 ensemble_updated_one_go_raw, ground_truth)
-        CRPS_one_go_loc, acc_one_go_loc, spread_one_go_loc = compute_CRPS(
+        CRPS_one_go_loc, misfit_one_go_loc, spread_one_go_loc = compute_CRPS(
+                ensemble_updated_one_go_loc, ground_truth)
+        ES_one_go_raw, ES_misfit_one_go_raw, ES_spread_one_go_raw = compute_energy_score(
+                ensemble_updated_one_go_raw, ground_truth)
+        ES_one_go_loc, ES_misfit_one_go_loc, ES_spread_one_go_loc = compute_energy_score(
                 ensemble_updated_one_go_loc, ground_truth)
 
-        # Normalize.
-        acc_one_go_raw, acc_one_go_loc = (1 / n_ensembles) * acc_one_go_raw, (1 / n_ensembles) * acc_one_go_loc
-        spread_one_go_raw, spread_one_go_loc = (1 / (2 * n_ensembles**2)) * spread_one_go_raw, (1 / (2 * n_ensembles**2)) * spread_one_go_loc
 
         fig, axs = plt.subplots(3, 3)
         grid.plot_vals(ground_truth, axs[0, 0], points=grid_pts[data_inds], vmin=-3, vmax=3)
@@ -156,13 +157,13 @@ def main():
         axs[0, 2].set_xticks([])
 
         grid.plot_vals(CRPS_one_go_raw.compute(), axs[1, 0], vmin=0, vmax=3)
-        axs[1, 0].title.set_text('CRPS raw')
+        axs[1, 0].title.set_text('CRPS raw (ES: {})'.format(ES_one_go_raw.compute()))
 
-        grid.plot_vals(acc_one_go_raw.compute(), axs[1, 1],
+        grid.plot_vals(misfit_one_go_raw.compute(), axs[1, 1],
                 points=grid_pts[data_inds],
                 vmin=0, vmax=2.5,
                 points_color='magenta')
-        axs[1, 1].title.set_text('acc raw')
+        axs[1, 1].title.set_text('misfit raw')
 
         grid.plot_vals(spread_one_go_raw.compute(), axs[1, 2],
                 points=grid_pts[data_inds],
@@ -170,13 +171,13 @@ def main():
         axs[1, 2].title.set_text('spread raw')
 
         grid.plot_vals(CRPS_one_go_loc.compute(), axs[2, 0], vmin=0, vmax=3)
-        axs[2, 0].title.set_text('CRPS loc')
+        axs[2, 0].title.set_text('CRPS loc (ES: {})'.format(ES_one_go_loc.compute()))
 
-        grid.plot_vals(acc_one_go_loc.compute(), axs[2, 1],
+        grid.plot_vals(misfit_one_go_loc.compute(), axs[2, 1],
                 points=grid_pts[data_inds],
                 vmin=0, vmax=2.5,
                 points_color="magenta")
-        axs[2, 1].title.set_text('accuray loc')
+        axs[2, 1].title.set_text('misfit loc')
 
         grid.plot_vals(spread_one_go_loc.compute(), axs[2, 2],
                 points=grid_pts[data_inds],
