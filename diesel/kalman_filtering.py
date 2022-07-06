@@ -5,12 +5,12 @@ In DIESEL, an ensemble is a dask array of shape (n_members, dim).
 """
 import dask.array as da
 from dask.array import matmul, eye, transpose
+from dask.distributed import wait, progress
 from diesel.utils import cholesky_invert
 
 
 class EnsembleKalmanFilter:
     def __init__(self):
-        pass
 
     def _update_mean(self, mean, G, y, cov_pushfwd, inv):
         """ Helper function for updating the mean over a single period.
@@ -226,6 +226,7 @@ class EnsembleKalmanFilter:
         # Loop over the data points and ingest sequentially.
         for i in range(G.shape[0]):
             print(i)
+            print("One step.\n")
             # One data points.
             G_seq = G[i, :].reshape(1, -1)
             y_seq = y[i].reshape(1, -1)
@@ -239,5 +240,5 @@ class EnsembleKalmanFilter:
                     mean_updated, ensemble_updated,
                     G_seq, y_seq,
                     data_std, cov_est)   
-            mean_updated, ensemble_updated = mean_updated.compute(), ensemble_updated.compute()
-        return da.from_array(mean_updated), da.from_array(ensemble_updated)
+
+        return mean_updated, ensemble_updated

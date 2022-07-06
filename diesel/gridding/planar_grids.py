@@ -86,7 +86,7 @@ class SquareGrid:
                 vmin=vmin, vmax=vmax)
 
         if points is not None:
-            ax.scatter(points[:, 0], points[:, 1], c=points_color, s=10, marker='*')
+            ax.scatter(points[:, 0], points[:, 1], c=points_color, s=3, marker='*')
         if colorbar is True:
             # Add colorbar
             divider = make_axes_locatable(ax)

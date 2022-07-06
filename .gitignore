@@ -7,6 +7,7 @@ __pycache__/
 *.png
 *.pkl
 dask-worker-space/
+slurm*
 
 # C extensions
 *.so

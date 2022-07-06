@@ -28,7 +28,7 @@ def UbelixCluster(n_nodes, mem_per_node=16, cores_per_node=1,
     """
     mem_per_node = "{} GB".format(mem_per_node)
     cluster = SLURMCluster(
-        cores=core_per_node,
+        cores=cores_per_node,
         memory=mem_per_node,
         death_timeout=6000,
         walltime="02:00:00",
