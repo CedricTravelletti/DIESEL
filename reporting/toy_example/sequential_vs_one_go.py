@@ -8,9 +8,11 @@ import matplotlib.pyplot as plt
 import dask.array as da
 from dask.distributed import Client, wait, progress
 import diesel as ds
-from diesel.kalman_filtering import EnsembleKalmanFilter
 from diesel.scoring import compute_RE_score, compute_CRPS, compute_energy_score
 from diesel.estimation import localize_covariance
+
+
+import time
 
 
 # results_folder ="/home/cedric/PHD/Dev/DIESEL/reporting/toy_example/results/"
@@ -20,9 +22,14 @@ results_folder ="/storage/homefs/ct19x463/Dev/DIESEL/reporting/toy_example/resul
 def main():
     # Instantiate a local cluster, to mimick distributed computations, but on a single machine.
     # cluster = ds.cluster.LocalCluster()
-    cluster = ds.cluster.UbelixCluster(n_nodes=8, mem_per_node=24, cores_per_node=4,
+    cluster = ds.cluster.UbelixCluster(n_nodes=12, mem_per_node=32, cores_per_node=2,
             partition="gpu", qos="job_gpu")
+    cluster.scale(12)
     client = Client(cluster)
+
+    # Add to builtins so we have one global client.
+    __builtins__.CLIENT = client
+    from diesel.kalman_filtering import EnsembleKalmanFilter
     
     # Build a square grid with 30^2 elements.
     grid = ds.gridding.SquareGrid(n_pts_1d=120)
@@ -53,13 +60,23 @@ def main():
         ground_truth = ensembles[0]
         ensembles = ensembles[1:]
     
+        # Compute ensemble mean.
+        mean = da.mean(da.stack(ensembles, axis=1), axis=1)
+    
         # Trigger computations.
         ground_truth = client.persist(ground_truth)
-        # np.save(os.path.join(results_folder, "ground_truth_{}.npy".format(rep)), ground_truth.compute())
         ensembles = [client.persist(ensemble) for ensemble in ensembles]
 
         # Stack ensembles so are in the format required later.
         ensembles = da.stack(ensembles)
+
+        # Save for later.
+        np.save(os.path.join(
+            results_folder, "ground_truth_{}.npy".format(rep)), ground_truth.compute())
+        np.save(os.path.join(
+            results_folder, "ensemble_{}.npy".format(rep)), ensembles.compute())
+        np.save(os.path.join(
+            results_folder, "mean_{}.npy".format(rep)), mean.compute())
     
         # Estimate covariance using empirical covariance of the ensemble.
         raw_estimated_cov_lazy = ds.estimation.empirical_covariance(ensembles)
@@ -86,9 +103,6 @@ def main():
         data_std = 0.01
         y = G @ ground_truth
     
-        # Compute ensemble mean.
-        mean = da.mean(da.stack(ensembles, axis=1), axis=1)
-    
         # Run data assimilation using an ensemble Kalman filter.
         my_filter = EnsembleKalmanFilter()
 
@@ -100,6 +114,13 @@ def main():
                 client.persist(ensemble_updated_one_go_raw))
         progress(ensemble_updated_one_go_raw)
 
+        np.save(os.path.join(
+            results_folder, "mean_updated_one_go_raw_{}.npy".format(rep)),
+            mean_updated_one_go_raw.compute())
+        np.save(os.path.join(
+            results_folder, "ensemble_updated_one_go_raw_{}.npy".format(rep)),
+            ensemble_updated_one_go_raw.compute())
+
         mean_updated_one_go_loc, ensemble_updated_one_go_loc = my_filter.update_ensemble(
                 mean, ensembles, G, y, data_std, loc_estimated_cov)
 
@@ -109,50 +130,117 @@ def main():
                 client.persist(ensemble_updated_one_go_loc))
         progress(ensemble_updated_one_go_loc)
 
+        np.save(os.path.join(
+            results_folder, "mean_updated_one_go_loc_{}.npy".format(rep)),
+            mean_updated_one_go_loc.compute())
+        np.save(os.path.join(
+            results_folder, "ensemble_updated_one_go_loc_{}.npy".format(rep)),
+            ensemble_updated_one_go_loc.compute())
+
+
         localizer_loc = lambda x: localize_covariance(ds.estimation.empirical_covariance(x), scaled_covariance_matrix)
         localizer_raw = lambda x: ds.estimation.empirical_covariance(x)
 
-        chunk_size = 20
-        mean_updated_seq_raw = mean
-        ensemble_updated_seq_raw = ensembles
-        for i in range(0, G.shape[0], chunk_size):
-            G_chunk = G[i:i+chunk_size]
-            y_chunk = y[i:i+chunk_size]
-            mean_updated_seq_raw, ensemble_updated_seq_raw = my_filter.update_ensemble_sequential(
+        # Stupid, but have to transfer to local node 
+        # in order to preserve from cancelling.
+        mean_store = mean.compute()
+        ensemble_store = ensembles.compute()
+
+        chunk_size = 1
+        mean_updated_seq_raw = client.persist(da.from_array(mean_store))
+        ensemble_updated_seq_raw = client.persist(da.from_array(ensemble_store))
+        running_estimated_cov = raw_estimated_cov
+        # for i in range(0, G.shape[0], chunk_size):
+        for i in range(0, 50, chunk_size):
+            print(i)
+            running_estimated_cov_lazy = ds.estimation.empirical_covariance(ensemble_updated_seq_raw)
+            running_estimated_cov = client.persist(running_estimated_cov_lazy)
+            print("Estimating cov.")
+            progress(running_estimated_cov)
+
+            G_chunk = G[i:i+chunk_size].reshape(chunk_size, -1)
+            y_chunk = y[i:i+chunk_size].reshape(chunk_size, -1)
+
+            mean_updated_seq_raw, ensemble_updated_seq_raw = my_filter.update_ensemble(
                         mean_updated_seq_raw, ensemble_updated_seq_raw,
-                        G_chunk, y_chunk, data_std, raw_estimated_cov,
-                        covariance_estimator=localizer_raw
+                        G_chunk, y_chunk, data_std, running_estimated_cov
                 )
             mean_updated_seq_raw = client.persist(mean_updated_seq_raw)
             ensemble_updated_seq_raw = client.persist(ensemble_updated_seq_raw)
-            wait(ensemble_updated_seq_raw)
+            print("Start progress.")
+            progress(ensemble_updated_seq_raw)
+            print("End progress.")
+            ensemble_tmp = ensemble_updated_seq_raw.compute()
+            mean_tmp = mean_updated_seq_raw.compute()
+            client.cancel(ensemble_updated_seq_raw)
+            client.cancel(mean_updated_seq_raw)
+            client.cancel(running_estimated_cov_lazy)
+            client.cancel(running_estimated_cov)
+            mean_updated_seq_raw = client.persist(da.from_array(mean_tmp))
+            ensemble_updated_seq_raw = client.persist(da.from_array(ensemble_tmp))
 
-        mean_updated_seq_loc = mean
-        ensemble_updated_seq_loc = ensembles
-        for i in range(0, G.shape[0], chunk_size):
-            G_chunk = G[i:i+chunk_size]
-            y_chunk = y[i:i+chunk_size]
-            mean_updated_seq_loc, ensemble_updated_seq_loc = my_filter.update_ensemble_sequential(
-                mean_updated_seq_loc, ensemble_updated_seq_loc,
-                G_chunk, y_chunk, data_std, raw_estimated_cov,
-                covariance_estimator=localizer_loc
+            np.save(os.path.join(
+                results_folder, "mean_updated_seq_raw_{}.npy".format(i)),
+                mean_updated_seq_raw.compute())
+            np.save(os.path.join(
+                results_folder, "ensemble_updated_seq_raw_{}.npy".format(i)),
+                ensemble_updated_seq_raw.compute())
+
+        print(ensembles.compute())
+        mean_updated_seq_loc = client.persist(da.from_array(mean_store))
+        ensemble_updated_seq_loc = client.persist(da.from_array(ensemble_store))
+        running_estimated_cov = raw_estimated_cov
+        # for i in range(0, G.shape[0], chunk_size):
+        for i in range(0, 50, chunk_size):
+            print(i)
+            running_estimated_cov_lazy = localizer_loc(ensemble_updated_seq_loc)
+            running_estimated_cov = client.persist(running_estimated_cov_lazy)
+            print("Estimating cov.")
+            progress(running_estimated_cov)
+
+            G_chunk = G[i:i+chunk_size].reshape(chunk_size, -1)
+            y_chunk = y[i:i+chunk_size].reshape(chunk_size, -1)
+
+            mean_updated_seq_loc, ensemble_updated_seq_loc = my_filter.update_ensemble(
+                        mean_updated_seq_loc, ensemble_updated_seq_loc,
+                        G_chunk, y_chunk, data_std, running_estimated_cov
                 )
             mean_updated_seq_loc = client.persist(mean_updated_seq_loc)
             ensemble_updated_seq_loc = client.persist(ensemble_updated_seq_loc)
-            wait(ensemble_updated_seq_loc)
+            print("Start progress.")
+            progress(ensemble_updated_seq_loc)
+            print("End progress.")
+            ensemble_tmp = ensemble_updated_seq_loc.compute()
+            mean_tmp = mean_updated_seq_loc.compute()
+            client.cancel(ensemble_updated_seq_loc)
+            client.cancel(mean_updated_seq_loc)
+            client.cancel(running_estimated_cov_lazy)
+            client.cancel(running_estimated_cov)
+            mean_updated_seq_loc = client.persist(da.from_array(mean_tmp))
+            ensemble_updated_seq_loc = client.persist(da.from_array(ensemble_tmp))
+
+            np.save(os.path.join(
+                results_folder, "mean_updated_seq_loc_{}.npy".format(i)),
+                mean_updated_seq_loc.compute())
+            np.save(os.path.join(
+                results_folder, "ensemble_updated_seq_loc_{}.npy".format(i)),
+                ensemble_updated_seq_loc.compute())
 
         # Compare sequential and one-go.
         fig, axs = plt.subplots(2, 3)
-        grid.plot_vals(ground_truth, axs[0, 0], points=grid_pts[data_inds], vmin=-3, vmax=3)
+        grid.plot_vals(ground_truth, axs[0, 0], 
+                vmin=-3, vmax=3)
         axs[0, 0].title.set_text('ground truth')
         axs[0, 0].set_xticks([])
 
-        grid.plot_vals(client.compute(mean_updated_one_go_raw).result(), axs[0, 1], points=grid_pts[data_inds], vmin=-3, vmax=3)
+        grid.plot_vals(client.compute(mean_updated_one_go_raw).result(), axs[0, 1],
+                vmin=-3, vmax=3)
         axs[0, 1].title.set_text('all-at-once (no localization)')
         axs[0, 1].set_xticks([])
         axs[0, 1].set_yticks([])
 
-        grid.plot_vals(client.compute(mean_updated_one_go_loc).result(), axs[0, 2], points=grid_pts[data_inds], vmin=-3, vmax=3)
+        grid.plot_vals(client.compute(mean_updated_one_go_loc).result(), axs[0, 2],
+                vmin=-3, vmax=3)
         axs[0, 2].title.set_text('all-at-once (localization)')
         axs[0, 2].set_xticks([])
         axs[0, 2].set_yticks([])
@@ -161,12 +249,14 @@ def main():
         axs[1, 0].title.set_text('prior mean')
         axs[1, 0].set_xticks([])
 
-        grid.plot_vals(client.compute(mean_updated_seq_raw).result(), axs[1, 1], points=grid_pts[data_inds], vmin=-3, vmax=3)
+        grid.plot_vals(client.compute(mean_updated_seq_raw).result(), axs[1, 1],
+                vmin=-3, vmax=3)
         axs[1, 1].title.set_text('sequential (no localization)')
         axs[1, 1].set_xticks([])
         axs[1, 1].set_yticks([])
 
-        grid.plot_vals(mean_updated_seq_loc.compute(), axs[1, 2], points=grid_pts[data_inds], vmin=-3, vmax=3)
+        grid.plot_vals(mean_updated_seq_loc.compute(), axs[1, 2],
+                vmin=-3, vmax=3)
         axs[1, 2].title.set_text('sequential (localization)')
         axs[1, 2].set_xticks([])
         axs[1, 2].set_yticks([])
@@ -193,13 +283,13 @@ def main():
         axs[0, 0].set_xticks([])
 
         grid.plot_vals(mean_updated_one_go_raw.compute(), axs[0, 1],
-                points=grid_pts[data_inds], vmin=-3, vmax=3)
+                vmin=-3, vmax=3)
         axs[0, 1].title.set_text('all-at-once (no localization)')
         axs[0, 1].set_xticks([])
         axs[0, 1].set_yticks([])
 
         grid.plot_vals(mean_updated_one_go_loc.compute(), axs[0, 2],
-                points=grid_pts[data_inds], vmin=-3, vmax=3)
+                vmin=-3, vmax=3)
         axs[0, 2].title.set_text('all-at-once (localization)')
         axs[0, 2].set_xticks([])
         axs[0, 2].set_yticks([])
