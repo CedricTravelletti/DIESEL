@@ -104,10 +104,10 @@ class EnsembleKalmanFilter:
         anomalies = ensemble - mean.reshape(-1)[None, :]
 
         # First compute the inverse of the sqrt.
-        inv_sqrt = da.linalg.inv(sqrt)
+        _, inv_sqrt = cholesky_invert(sqrt)
 
         # Inverese of the other matrix involved.
-        inv_2 = da.linalg.inv(sqrt + data_std * eye(G.shape[0]))
+        _, inv_2 = cholesky_invert(sqrt + data_std * eye(G.shape[0]))
 
         kalman_gain_tilde = matmul(cov_pushfwd,
                 matmul(inv_sqrt.T, inv_2))
