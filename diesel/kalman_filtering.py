@@ -11,6 +11,7 @@ from diesel.utils import cholesky_invert
 
 class EnsembleKalmanFilter:
     def __init__(self):
+        pass
 
     def _update_mean(self, mean, G, y, cov_pushfwd, inv):
         """ Helper function for updating the mean over a single period.
