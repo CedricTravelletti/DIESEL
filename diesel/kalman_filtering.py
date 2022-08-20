@@ -8,6 +8,8 @@ from dask.array import matmul, eye, transpose
 from dask.distributed import wait, progress
 from diesel.utils import cholesky_invert
 
+# from builtins import CLIENT as client
+
 
 class EnsembleKalmanFilter:
     def __init__(self):
@@ -149,6 +151,7 @@ class EnsembleKalmanFilter:
         to_invert = matmul(G, cov_pushfwd) + data_cov
 
         sqrt, inv = cholesky_invert(to_invert)
+
         anomalies_updated = self._update_anomalies(
                 mean, ensemble, G, data_std, cov_pushfwd, sqrt)
         mean_updated = self._update_mean(mean, G, y, cov_pushfwd, inv)
