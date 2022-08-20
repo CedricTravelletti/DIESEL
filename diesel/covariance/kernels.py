@@ -6,39 +6,15 @@ import dask
 import dask.array as da
 import dask_distance
 import dask_distance._utils as utils
+from haversine import haversine
 
 
 # @utils._broadcast_uv_wrapper
 def pairwise_euclidean(coords1, coords2):
     return dask_distance.euclidean(coords1, coords2)
 
-def haversine(point1, point2):
-    """ Haversine distance between two points.
-
-    Parameters
-    ----------
-    point1: array (2,)
-        Point coordinates, with the first element being the latitude in degrees
-        and the second one the longitude.
-    point2: array (2,)
-
-    Returns
-    -------
-    dist: float
-        Distance in kilometers.
-
-    """
-    lat1, lon1 = np.deg2rad(point1[0]), np.deg2rad(point1[1])
-    lat2, lon2 = np.deg2rad(point2[0]), np.deg2rad(point2[1])
-
-    angle = np.arccos(
-            np.sin(lat1) * np.sin(lat2)
-            + np.cos(lat1) * np.cos(lat2) * np.cos(lon2 - lon1))
-    km_conversion = 6371
-    return km_conversion * angle
-
 def pairwise_haversine(coords1, coords2):
-    return dask_distance.cdist(coords1, coords2, haversine)
+    return dask_distance.cdist(coords1, coords2, lambda x, y: haversine(x[0], x[1], y[0], y[1]))
 
 class matern32:
     """ Matern 3/2 covariance kernel.
@@ -83,7 +59,8 @@ class matern32:
             dists = dask_distance.seuclidean(coords1, coords2, lengthscales**2)
         elif metric == 'haversine':
             dists = (1 / lengthscales) * pairwise_haversine(coords1, coords2)
-        else: raise ValueError("Metric not implemented.")
+        else:
+            raise ValueError("Metric not implemented.")
 
         res = da.multiply(
                 1 + np.sqrt(3) * dists,
@@ -105,7 +82,7 @@ class squared_exponential:
         """
         self.lengthscales = lengthscales
 
-    def covariance_matrix(self, coords1, coords2, lengthscales=None):
+    def covariance_matrix(self, coords1, coords2, lengthscales=None,  metric='euclidean'):
         """ Compute covariance matrix between two sets of points.
 
         Parameters
@@ -127,6 +104,12 @@ class squared_exponential:
         if lengthscales is None:
             lengthscales = self.lengthscales
 
-        dists = dask_distance.seuclidean(coords1, coords2, lengthscales**2)
+        if metric == 'euclidean':
+            dists = dask_distance.seuclidean(coords1, coords2, lengthscales**2)
+        elif metric == 'haversine':
+            dists = (1 / lengthscales) * pairwise_haversine(coords1, coords2)
+        else:
+            raise ValueError("Metric not implemented.")
+
         res = da.exp(- (1 / 2) * dists**2)
         return res
