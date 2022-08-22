@@ -34,11 +34,17 @@ def cholesky_invert(A):
     # to recover the original Cholesky decomposition from the one of the 
     # augmented matrix.
 
-    # If small enough, then use only one chunk.
-    if A.shape[0] < CHUNK_REDUCTION_FACTOR - 1:
+    # If small enough then use only one chunk.
+    if (A.shape[0] < CHUNK_REDUCTION_FACTOR - 1):
         chunk_size = A.shape[0]
         A_rechunked = A.rechunk(chunk_size)
         shape_diff = 0
+
+    # If already square, then proceed.
+    elif len(set(A.chunks[0] + A.chunks[1])) == 1: 
+        A_rechunked = A
+        shape_diff = 0
+        chunk_size = A.chunks[0][0]
 
     # Else append identity matrix to get a shape that is 
     # divisible by CHUNK_REDUCTION_FACTOR.
