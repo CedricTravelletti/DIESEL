@@ -3,12 +3,15 @@
 In DIESEL, an ensemble is a dask array of shape (n_members, dim).
 
 """
+import numpy as np
 import dask.array as da
 from dask.array import matmul, eye, transpose
-from dask.distributed import wait, progress
+from dask.distributed import wait
 from diesel.utils import cholesky_invert
 
-# from builtins import CLIENT as client
+import time
+
+from builtins import CLIENT as client
 
 
 class EnsembleKalmanFilter:
@@ -193,6 +196,59 @@ class EnsembleKalmanFilter:
             y_seq = y[i].reshape(1, -1)
 
             mean_updated = self.update_mean(mean, G, y, data_std, cov)   
+
+            # Have to execute once in a while, otherwise graph gets too big.
+            if i % 100 == 0:
+                mean_updated = client.persist(mean_updated)
+        return mean_updated
+
+    def update_mean_sequential_nondask(self, mean, G, y, data_std, cov):
+        """ Update the mean over a single period (step) by assimilating the 
+        data sequentially (one data point at a time).
+
+        Parameters
+        ----------
+        mean: dask.array (m)
+            Vector of mean elements.
+        G: dask.array (n, m)
+            Observation operator.
+        y: dask.array (n, 1)
+            Observed data.
+        data_std: float
+            Standard deviation of observational noise.
+        cov: dask.array (m, m)
+            Covariance matrix (estimated) between the grid points. 
+            Can be lazy.
+
+        Returns
+        -------
+        update_mean: dask.array (m, 1) (lazy)
+
+        """
+        mean_updated = client.compute(mean).result().reshape(-1, 1)
+        # Compute pushforward once and for all. extract lines later.
+        cov_pushfwd_full = client.persist(cov @ transpose(G))
+        wait(cov_pushfwd_full)
+
+        # Loop over the data points and ingest sequentially.
+        for i in range(G.shape[0]):
+            # One data points.
+            G_seq = G[i, :].reshape(1, -1)
+            y_seq = y[i].reshape(1, 1)
+
+            # Now are fully in numpy.
+            cov_pushfwd = client.compute(cov_pushfwd_full[:, i]).result().reshape(-1, 1)
+            G_seq = client.compute(G_seq).result()
+            y_seq = client.compute(y_seq).result()
+
+            data_cov = data_std**2 
+            to_invert = G_seq @ cov_pushfwd + data_cov
+            inv = np.linalg.inv(to_invert)
+
+            kalman_gain = cov_pushfwd @ inv
+            prior_misfit = y - G_seq @ mean
+            mean_updated = mean_updated + kalman_gain @ prior_misfit
+
         return mean_updated
 
     def update_ensemble_sequential(self, mean, ensemble, G, y, data_std, cov, covariance_estimator=None):
@@ -229,8 +285,6 @@ class EnsembleKalmanFilter:
 
         # Loop over the data points and ingest sequentially.
         for i in range(G.shape[0]):
-            print(i)
-            print("One step.\n")
             # One data points.
             G_seq = G[i, :].reshape(1, -1)
             y_seq = y[i].reshape(1, -1)
@@ -244,5 +298,11 @@ class EnsembleKalmanFilter:
                     mean_updated, ensemble_updated,
                     G_seq, y_seq,
                     data_std, cov_est)   
+
+            # Have to execute once in a while, otherwise graph gets too big.
+            if i % 1000 == 0:
+                print(i)
+                mean_updated = client.persist(mean_updated)
+                wait(mean_updated)
 
         return mean_updated, ensemble_updated
