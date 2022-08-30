@@ -2,7 +2,10 @@
 
 """
 import dask.array as da
+from dask.distributed import wait, progress
 
+
+from builtins import CLIENT as client
 
 CHUNK_REDUCTION_FACTOR = 4
 
@@ -11,7 +14,7 @@ def find_closest_multiple(x, base):
     if closest_lower == x: return x
     else: return closest_lower + base
 
-def cholesky_invert(A):
+def cholesky_invert(A, debug_string):
     """ Computes the (lower) Cholesky factor and the inverse 
     of a symmetric positive definite matrix using Cholesky decomposition 
     and backward substitution.
@@ -61,11 +64,45 @@ def cholesky_invert(A):
         chunk_size = int(new_shape / CHUNK_REDUCTION_FACTOR)
         A_rechunked = A_rechunked.rechunk(chunk_size)
 
-    R = da.linalg.cholesky(A_rechunked, lower=False)
-    R_inv = da.linalg.solve_triangular(R, da.linalg.eye(R.shape[0], chunks=chunk_size), lower=False)
+    # TEMP: try to compute to see if fails.
+    try:
+        R = da.linalg.cholesky(A_rechunked, lower=False)
+        R = client.persist(R)
+        wait(R)
+        print("Cholesky result.")
+        print(R.compute())
+    except:
+        print("Error in Cholesky")
+        print(debug_string)
+    try:
+        R_inv = da.linalg.solve_triangular(R, da.linalg.eye(R.shape[0], chunks=chunk_size), lower=False)
+        R_inv = client.persist(R_inv)
+        wait(R_inv)
+        print("Solve result.")
+        print(R_inv.compute())
+    except:
+        print("Error in solve triangular")
+        print(debug_string)
 
     # Extract the part of interest for us.
     if shape_diff > 0:
         R = R[:-shape_diff, :-shape_diff]
         R_inv = R_inv[:-shape_diff, :-shape_diff]
     return da.transpose(R), da.matmul(R_inv, da.transpose(R_inv))
+
+def svd_invert(A, svd_rank=None):
+    if svd_rank is None: svd_rank = A.shape[0]
+    # Compute compressed SVD.
+    # WARNING: dask return the already transposed version of v, 
+    # so that A = u @ diag(s) @ v.
+    # This is poorly documented in dask.
+    u, s, v = da.linalg.svd_compressed(
+                    A, k=svd_rank, compute=True) 
+    # Compute (symmetric) square root.
+    smat = da.diag(da.sqrt(s))
+    sqrt = da.matmul(da.matmul(u, smat), da.transpose(u))
+
+    imat = da.diag(da.true_divide(da.ones(s.shape), s))
+    inv = da.matmul(da.matmul(da.transpose(v), imat), da.transpose(u))
+
+    return sqrt, inv
