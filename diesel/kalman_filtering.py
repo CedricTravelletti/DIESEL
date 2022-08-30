@@ -131,6 +131,48 @@ class EnsembleKalmanFilter:
         # We remove the last dimension before returning.
         return anomalies_updated.squeeze(-1)
 
+    def _update_anomalies_single_nondask(self, mean, ensemble, G, data_std, cov_pushfwd, sqrt):
+        """ Helper function for updating the ensemble members during non-dask sequential 
+        updtating. only processes a single data point.
+
+        Parameters
+        ----------
+        mean: dask.array (m)
+            Vector of mean elements.
+        ensemble: dask.array (n_members, m)
+            Ensemble members (one vector per member).
+        G: dask.array (1, m)
+            Observation operator.
+        data_std: float
+            Standard deviation of observational noise.
+        cov_pushfwd: dask.array (1, n)
+            Covariance pushforward cov @ G.T
+        sqrt: float
+            Lower Cholesky factor (square root) of the data covariance.
+
+        Returns
+        -------
+        anomalies_updated: dask.array (n_members, m) (lazy)
+            Updated anomalies (deviations from mean). Have to add 
+            the updated mean to obtain updated ensemble members.
+
+        """
+        # Work with anomalies.
+        anomalies = ensemble - mean.reshape(-1)[None, :]
+
+        # First compute the inverse of the sqrt.
+        inv_sqrt = 1 / sqrt
+
+        inv_2 = 1 / (sqrt + data_std)
+        kalman_gain_tilde = (inv_sqrt * inv_2) * cov_pushfwd
+
+        # Compute predictions for each member using batched matrix multiplication.
+        base_pred = torch.matmul(G, anomalies[:, :, None]) # Resulting shape (n_members, m, 1)
+        anomalies_updated = anomalies[:, :, None] - torch.matmul(kalman_gain_tilde, base_pred)
+
+        # We remove the last dimension before returning.
+        return anomalies_updated.squeeze(-1)
+
     def update_ensemble(self, mean, ensemble, G, y, data_std, cov):
         """ Update an ensemble over a single period (step).
 
@@ -272,7 +314,7 @@ class EnsembleKalmanFilter:
 
         return mean_updated.detach().cpu().numpy()
 
-    def update_ensemble_sequential_nondask(self, mean, G, y, data_std, cov):
+    def update_ensemble_sequential_nondask(self, mean, ensemble, G, y, data_std, cov, covariance_estimator=None)):
         """ Update the mean over a single period (step) by assimilating the 
         data sequentially (one data point at a time).
 
@@ -296,44 +338,48 @@ class EnsembleKalmanFilter:
 
         """
         mean_updated = client.compute(mean).result().reshape(-1, 1)
-        # Compute pushforward once and for all. extract lines later.
-        cov_pushfwd_full = client.persist(cov @ transpose(G))
-        wait(cov_pushfwd_full)
+        ensemble_updated = client.compute(ensemble).result()
 
         # Repatriate y to the local process.
-        y = client.compute(y).result().reshape(-1, 1)
-        G = client.compute(G).result()
+        y_loc = client.compute(y).result().reshape(-1, 1)
+        G_loc = client.compute(G).result()
 
         # Send the important stuff to torch.
-        y = torch.from_numpy(y).to(DEVICE).float()
-        G = torch.from_numpy(G).to(DEVICE).float()
+        y_loc = torch.from_numpy(y_loc).to(DEVICE).float()
+        G_loc = torch.from_numpy(G_loc).to(DEVICE).float()
         mean_updated = torch.from_numpy(mean_updated).to(DEVICE).float()
+        ensemble_updated = torch.from_numpy(ensemble_updated).to(DEVICE).float()
 
         # Loop over the data points and ingest sequentially.
         for i in range(G.shape[0]):
-            # Every 500 observations, repatriate a chunk of the pushforward 
-            # and send it to the GPU.
-            if i % 500 == 0:
-                i_pushfwd_start = i # The index at which the local pushfwd starts.
-                local_pushfwd = client.compute(cov_pushfwd_full[:,i:i+500]).result()
-                local_pushfwd = torch.from_numpy(local_pushfwd).to(DEVICE).float()
+            # First compute the (localized) pushforward (on the cluster), 
+            # then repatriate to local process and send to GPU.
+            estimated_cov = covariance_estimator(
+                    da.from_array(ensemble_updated.cpu().numpy()))
+            cov_pushfwd = G[i, :] @ cov_loc
+            cov_pushfwd = torch.from_numpy(
+                    client.compute(local_pushfwd).result()).to(DEVICE).float()
 
             # One data points.
-            G_seq = G[i, :].reshape(1, -1)
-            y_seq = y[i].reshape(1, 1)
-
-            # Now are fully in numpy.
-            cov_pushfwd = local_pushfwd[:, i - i_pushfwd_start].reshape(-1, 1)
+            G_seq = G_loc[i, :].reshape(1, -1)
+            y_seq = y_loc[i].reshape(1, 1)
 
             data_cov = data_std**2 
             to_invert = torch.matmul(G_seq, cov_pushfwd) + data_cov
             inv = 1 / to_invert[0, 0]
+            sqrt = torch.sqrt(to_invert[0, 0])
 
             kalman_gain = inv * cov_pushfwd
             prior_misfit = y_seq - torch.matmul(G_seq, mean_updated)
-            mean_updated = mean_updated + torch.matmul(kalman_gain, prior_misfit)
 
-        return mean_updated.detach().cpu().numpy()
+            anomalies_updated = self._update_anomalies_single_nondask(
+                    mean_updated, ensemble_updated, G_seq, data_std, cov_pushfwd, sqrt)
+            # Warning, have to update mean after ensemble, since ensemble use the prior mean in the update.
+            mean_updated = mean_updated + torch.matmul(kalman_gain, prior_misfit)
+            # Add the mean to get ensemble from anomalies.
+            ensemble_updated = mean_updated.reshape(-1)[None, :] + anomalies_updated
+
+        return mean_updated.detach().cpu().numpy(), ensemble_updated.detach().cpu().numpy()
 
     def update_ensemble_sequential(self, mean, ensemble, G, y, data_std, cov, covariance_estimator=None):
         """ Update an ensemble over a single period (step) by assimilating the 
