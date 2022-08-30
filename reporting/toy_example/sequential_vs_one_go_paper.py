@@ -41,15 +41,15 @@ def main():
     # cluster = ds.cluster.LocalCluster()
     cluster = ds.cluster.UbelixCluster(n_nodes=12, mem_per_node=64, cores_per_node=3,
             partition="gpu", qos="job_gpu")
-    cluster.scale(16)
+    cluster.scale(10)
     client = Client(cluster)
 
     # Add to builtins so we have one global client.
     __builtins__.CLIENT = client
     from diesel.kalman_filtering import EnsembleKalmanFilter
     
-    # Build a square grid with 30^2 elements.
-    grid = ds.gridding.SquareGrid(n_pts_1d=120)
+    # Build a square grid with 80^2 elements.
+    grid = ds.gridding.SquareGrid(n_pts_1d=80)
     grid_pts = grid.grid_pts
     
     # Construct (lazy) covariance matrix.
@@ -71,7 +71,7 @@ def main():
     for rep in range(n_rep):
         print("Repetition {} / {}.".format(rep, n_rep))
         # Sample 30 ensemble members.
-        n_ensembles = 31
+        n_ensembles = 30
         ensembles = sampler.sample(n_ensembles + 1) # Note this is still lazy.
     
         # Use the first sample as ground truth.
@@ -108,8 +108,10 @@ def main():
         loc_estimated_cov = client.persist(loc_estimated_cov)
     
         # Prepare some data by randomly selecting some points.
-        n_data = 1000
+        n_data = 300
         data_inds = np.random.choice(ground_truth.shape[0], n_data, replace=False)  
+        np.save(os.path.join(
+            results_folder, "data_inds_{}.npy".format(rep)), data_inds)
     
         #  Built observation operator.
         G = np.zeros((data_inds.shape[0], ground_truth.shape[0]))
@@ -164,39 +166,31 @@ def main():
         localizer_loc = lambda x: localize_covariance(ds.estimation.empirical_covariance(x), scaled_covariance_matrix)
         localizer_raw = lambda x: ds.estimation.empirical_covariance(x)
 
-        mean_updated_seq_loc, ensemble_updated_seq_loc = my_filter.update_ensemble_sequential(
+        mean_updated_seq_loc, ensemble_updated_seq_loc = my_filter.update_ensemble_sequential_nondask(
                 mean, ensembles, G, y, data_std, raw_estimated_cov,
-                localizer_loc)
-        mean_updated_seq_loc, ensemble_updated_seq_loc = (
-                client.persist(mean_updated_seq_loc),
-                client.persist(ensemble_updated_seq_loc))
-        progress(ensemble_updated_seq_loc)
+                scaled_covariance_matrix)
 
         np.save(os.path.join(
                 results_folder, "mean_updated_seq_loc_{}.npy".format(rep)),
-                mean_updated_seq_loc.compute())
+                mean_updated_seq_loc)
         np.save(os.path.join(
                 results_folder, "ensemble_updated_seq_loc_{}.npy".format(rep)),
-                ensemble_updated_seq_loc.compute())
+                ensemble_updated_seq_loc)
 
         # Here only localize the prior estimate of the covariance, then assimilate sequentially.
         # This means that the covariance matrxi we use is always the localized version of the prior 
         # sample covariance, whereas in the usual scheme, one uses the localized version of the 
         # updated sample covariance.
-        mean_updated_seq_loc_begin, ensemble_updated_seq_loc_begin = my_filter.update_ensemble_sequential(
+        mean_updated_seq_loc_begin, ensemble_updated_seq_loc_begin = my_filter.update_ensemble_sequential_nondask(
                 mean, ensembles, G, y, data_std, loc_estimated_cov,
                 localizer_raw)
-        mean_updated_seq_loc_begin, ensemble_updated_seq_loc_begin = (
-                client.persist(mean_updated_seq_loc_begin),
-                client.persist(ensemble_updated_seq_loc_begin))
-        progress(ensemble_updated_seq_loc_begin)
 
         np.save(os.path.join(
                 results_folder, "mean_updated_seq_loc_begin_{}.npy".format(rep)),
-                mean_updated_seq_loc_begin.compute())
+                mean_updated_seq_loc_begin))
         np.save(os.path.join(
                 results_folder, "ensemble_updated_seq_loc_begin_{}.npy".format(rep)),
-                ensemble_updated_seq_loc_begin.compute())
+                ensemble_updated_seq_loc_begin))
 
 
 if __name__ == "__main__":
