@@ -7,11 +7,18 @@ import numpy as np
 import dask.array as da
 from dask.array import matmul, eye, transpose
 from dask.distributed import wait
-from diesel.utils import cholesky_invert
+from diesel.utils import cholesky_invert, svd_invert
 
 import time
 
 from builtins import CLIENT as client
+
+# Use torch for the sequential updating (which is done entirely on the scheduler.
+import torch
+torch.set_num_threads(8)
+
+# Select gpu if available and fallback to cpu else.
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class EnsembleKalmanFilter:
@@ -109,11 +116,11 @@ class EnsembleKalmanFilter:
         anomalies = ensemble - mean.reshape(-1)[None, :]
 
         # First compute the inverse of the sqrt.
-        _, inv_sqrt = cholesky_invert(sqrt)
+        _, inv_sqrt = svd_invert(sqrt)
 
+        # TODO: Just trying to see where it goes wrong.
         # Inverese of the other matrix involved.
-        _, inv_2 = cholesky_invert(sqrt + data_std * eye(G.shape[0]))
-
+        _, inv_2 = svd_invert(sqrt + data_std * eye(G.shape[0]))
         kalman_gain_tilde = matmul(cov_pushfwd,
                 matmul(inv_sqrt.T, inv_2))
 
@@ -153,7 +160,7 @@ class EnsembleKalmanFilter:
         data_cov = data_std**2 * eye(y.shape[0])
         to_invert = matmul(G, cov_pushfwd) + data_cov
 
-        sqrt, inv = cholesky_invert(to_invert)
+        sqrt, inv = svd_invert(to_invert)
 
         anomalies_updated = self._update_anomalies(
                 mean, ensemble, G, data_std, cov_pushfwd, sqrt)
@@ -230,26 +237,103 @@ class EnsembleKalmanFilter:
         cov_pushfwd_full = client.persist(cov @ transpose(G))
         wait(cov_pushfwd_full)
 
+        # Repatriate y to the local process.
+        y = client.compute(y).result().reshape(-1, 1)
+        G = client.compute(G).result()
+
+        # Send the important stuff to torch.
+        y = torch.from_numpy(y).to(DEVICE).float()
+        G = torch.from_numpy(G).to(DEVICE).float()
+        mean_updated = torch.from_numpy(mean_updated).to(DEVICE).float()
+
         # Loop over the data points and ingest sequentially.
         for i in range(G.shape[0]):
+            # Every 500 observations, repatriate a chunk of the pushforward 
+            # and send it to the GPU.
+            if i % 500 == 0:
+                i_pushfwd_start = i # The index at which the local pushfwd starts.
+                local_pushfwd = client.compute(cov_pushfwd_full[:,i:i+500]).result()
+                local_pushfwd = torch.from_numpy(local_pushfwd).to(DEVICE).float()
+
             # One data points.
             G_seq = G[i, :].reshape(1, -1)
             y_seq = y[i].reshape(1, 1)
 
             # Now are fully in numpy.
-            cov_pushfwd = client.compute(cov_pushfwd_full[:, i]).result().reshape(-1, 1)
-            G_seq = client.compute(G_seq).result()
-            y_seq = client.compute(y_seq).result()
+            cov_pushfwd = local_pushfwd[:, i - i_pushfwd_start].reshape(-1, 1)
 
             data_cov = data_std**2 
-            to_invert = G_seq @ cov_pushfwd + data_cov
-            inv = np.linalg.inv(to_invert)
+            to_invert = torch.matmul(G_seq, cov_pushfwd) + data_cov
+            inv = 1 / to_invert[0, 0]
 
-            kalman_gain = cov_pushfwd @ inv
-            prior_misfit = y - G_seq @ mean
-            mean_updated = mean_updated + kalman_gain @ prior_misfit
+            kalman_gain = inv * cov_pushfwd
+            prior_misfit = y_seq - torch.matmul(G_seq, mean_updated)
+            mean_updated = mean_updated + torch.matmul(kalman_gain, prior_misfit)
 
-        return mean_updated
+        return mean_updated.detach().cpu().numpy()
+
+    def update_ensemble_sequential_nondask(self, mean, G, y, data_std, cov):
+        """ Update the mean over a single period (step) by assimilating the 
+        data sequentially (one data point at a time).
+
+        Parameters
+        ----------
+        mean: dask.array (m)
+            Vector of mean elements.
+        G: dask.array (n, m)
+            Observation operator.
+        y: dask.array (n, 1)
+            Observed data.
+        data_std: float
+            Standard deviation of observational noise.
+        cov: dask.array (m, m)
+            Covariance matrix (estimated) between the grid points. 
+            Can be lazy.
+
+        Returns
+        -------
+        update_mean: dask.array (m, 1) (lazy)
+
+        """
+        mean_updated = client.compute(mean).result().reshape(-1, 1)
+        # Compute pushforward once and for all. extract lines later.
+        cov_pushfwd_full = client.persist(cov @ transpose(G))
+        wait(cov_pushfwd_full)
+
+        # Repatriate y to the local process.
+        y = client.compute(y).result().reshape(-1, 1)
+        G = client.compute(G).result()
+
+        # Send the important stuff to torch.
+        y = torch.from_numpy(y).to(DEVICE).float()
+        G = torch.from_numpy(G).to(DEVICE).float()
+        mean_updated = torch.from_numpy(mean_updated).to(DEVICE).float()
+
+        # Loop over the data points and ingest sequentially.
+        for i in range(G.shape[0]):
+            # Every 500 observations, repatriate a chunk of the pushforward 
+            # and send it to the GPU.
+            if i % 500 == 0:
+                i_pushfwd_start = i # The index at which the local pushfwd starts.
+                local_pushfwd = client.compute(cov_pushfwd_full[:,i:i+500]).result()
+                local_pushfwd = torch.from_numpy(local_pushfwd).to(DEVICE).float()
+
+            # One data points.
+            G_seq = G[i, :].reshape(1, -1)
+            y_seq = y[i].reshape(1, 1)
+
+            # Now are fully in numpy.
+            cov_pushfwd = local_pushfwd[:, i - i_pushfwd_start].reshape(-1, 1)
+
+            data_cov = data_std**2 
+            to_invert = torch.matmul(G_seq, cov_pushfwd) + data_cov
+            inv = 1 / to_invert[0, 0]
+
+            kalman_gain = inv * cov_pushfwd
+            prior_misfit = y_seq - torch.matmul(G_seq, mean_updated)
+            mean_updated = mean_updated + torch.matmul(kalman_gain, prior_misfit)
+
+        return mean_updated.detach().cpu().numpy()
 
     def update_ensemble_sequential(self, mean, ensemble, G, y, data_std, cov, covariance_estimator=None):
         """ Update an ensemble over a single period (step) by assimilating the 
@@ -284,10 +368,11 @@ class EnsembleKalmanFilter:
         mean_updated, ensemble_updated = mean, ensemble
 
         # Loop over the data points and ingest sequentially.
+        last_time = time.time()
         for i in range(G.shape[0]):
             # One data points.
             G_seq = G[i, :].reshape(1, -1)
-            y_seq = y[i].reshape(1, -1)
+            y_seq = y[i].reshape(1, 1)
 
             # Re-estimate the covariance if estimator provided.
             if covariance_estimator is not None:
@@ -300,9 +385,29 @@ class EnsembleKalmanFilter:
                     data_std, cov_est)   
 
             # Have to execute once in a while, otherwise graph gets too big.
-            if i % 1000 == 0:
+            if i % 10 == 0:
                 print(i)
+                now = time.time()
+                elapsed_time = now - last_time
+                last_time = now
+                print("Time since last persisting: {}.".format(elapsed_time))
                 mean_updated = client.persist(mean_updated)
-                wait(mean_updated)
+                ensemble_updated = client.persist(ensemble_updated)
+                wait(ensemble_updated)
+
+                # Repatriate locally, so we can cancel running tasks 
+                # to free the scheduler.
+                # TODO: this is not clean and should be solved.
+                mean_tmp = mean_updated.compute()
+                ensemble_tmp = ensemble_updated.compute()
+
+                # Cancel cached stuff to clean memory.
+                client.cancel(mean_updated)
+                client.cancel(ensemble_updated)
+                client.cancel(cov_est)
+
+                # After cancellation can re-send to the cluster.
+                mean_updated = client.persist(da.from_array(mean_tmp))
+                ensemble_updated = client.persist(da.from_array(ensemble_tmp))
 
         return mean_updated, ensemble_updated
