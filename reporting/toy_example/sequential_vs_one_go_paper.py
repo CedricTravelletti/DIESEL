@@ -177,21 +177,6 @@ def main():
                 results_folder, "ensemble_updated_seq_loc_{}.npy".format(rep)),
                 ensemble_updated_seq_loc)
 
-        # Here only localize the prior estimate of the covariance, then assimilate sequentially.
-        # This means that the covariance matrxi we use is always the localized version of the prior 
-        # sample covariance, whereas in the usual scheme, one uses the localized version of the 
-        # updated sample covariance.
-        mean_updated_seq_loc_begin, ensemble_updated_seq_loc_begin = my_filter.update_ensemble_sequential_nondask(
-                mean, ensembles, G, y, data_std, loc_estimated_cov,
-                localizer_raw)
-
-        np.save(os.path.join(
-                results_folder, "mean_updated_seq_loc_begin_{}.npy".format(rep)),
-                mean_updated_seq_loc_begin))
-        np.save(os.path.join(
-                results_folder, "ensemble_updated_seq_loc_begin_{}.npy".format(rep)),
-                ensemble_updated_seq_loc_begin))
-
 
 if __name__ == "__main__":
     main()

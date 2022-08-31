@@ -7,6 +7,7 @@ import numpy as np
 import dask.array as da
 from dask.array import matmul, eye, transpose
 from dask.distributed import wait
+import diesel as ds
 from diesel.utils import cholesky_invert, svd_invert
 
 import time
@@ -314,7 +315,7 @@ class EnsembleKalmanFilter:
 
         return mean_updated.detach().cpu().numpy()
 
-    def update_ensemble_sequential_nondask(self, mean, ensemble, G, y, data_std, cov, covariance_estimator=None)):
+    def update_ensemble_sequential_nondask(self, mean, ensemble, G, y, data_std, localization_matrix):
         """ Update the mean over a single period (step) by assimilating the 
         data sequentially (one data point at a time).
 
@@ -328,9 +329,9 @@ class EnsembleKalmanFilter:
             Observed data.
         data_std: float
             Standard deviation of observational noise.
-        cov: dask.array (m, m)
-            Covariance matrix (estimated) between the grid points. 
-            Can be lazy.
+        localization_matrix: dask.array (m, m)
+            Matrix used to perform localization. Will get Hadamard-producted with 
+            the empirical covariance at every assimilation stage.
 
         Returns
         -------
@@ -352,22 +353,31 @@ class EnsembleKalmanFilter:
 
         # Loop over the data points and ingest sequentially.
         for i in range(G.shape[0]):
-            # First compute the (localized) pushforward (on the cluster), 
-            # then repatriate to local process and send to GPU.
-            estimated_cov = covariance_estimator(
-                    da.from_array(ensemble_updated.cpu().numpy()))
-            cov_pushfwd = G[i, :] @ cov_loc
-            cov_pushfwd = torch.from_numpy(
-                    client.compute(local_pushfwd).result()).to(DEVICE).float()
-
+            print(i)
             # One data points.
             G_seq = G_loc[i, :].reshape(1, -1)
             y_seq = y_loc[i].reshape(1, 1)
 
+            # Find the indices at which G_seq is non zero and extract those 
+            # parts of the covariance.
+            _, obs_ind = G_seq.nonzero(as_tuple=True)
+            obs_ind = obs_ind.cpu().numpy()
+            cov_pushfwd = ds.estimation.empirical_covariance(
+                    da.from_array(ensemble_updated.cpu().numpy()))[:, obs_ind]
+            cov_pushfwd = torch.from_numpy(
+                        client.compute(cov_pushfwd).result()).to(DEVICE).float()
+            loc_obs_cov = torch.from_numpy(
+                    client.compute(loc_matrix[:, obs_ind]).result()).to(DEVICE).float()
+
+            cov_pushfwd = torch.mul(
+                    cov_pushfwd,
+                    loc_obs_cov
+                    )
+
             data_cov = data_std**2 
             to_invert = torch.matmul(G_seq, cov_pushfwd) + data_cov
-            inv = 1 / to_invert[0, 0]
-            sqrt = torch.sqrt(to_invert[0, 0])
+            inv = 1 / to_invert[0]
+            sqrt = torch.sqrt(to_invert[0])
 
             kalman_gain = inv * cov_pushfwd
             prior_misfit = y_seq - torch.matmul(G_seq, mean_updated)
