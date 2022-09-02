@@ -8,7 +8,7 @@ import dask.array as da
 from dask.array import matmul, eye, transpose
 from dask.distributed import wait
 import diesel as ds
-from diesel.utils import cholesky_invert, svd_invert
+from diesel.utils import cholesky_invert, svd_invert, cross_covariance
 
 import time
 
@@ -362,12 +362,14 @@ class EnsembleKalmanFilter:
             # parts of the covariance.
             _, obs_ind = G_seq.nonzero(as_tuple=True)
             obs_ind = obs_ind.cpu().numpy()
-            cov_pushfwd = ds.estimation.empirical_covariance(
-                    da.from_array(ensemble_updated.cpu().numpy()))[:, obs_ind]
-            cov_pushfwd = torch.from_numpy(
-                        client.compute(cov_pushfwd).result()).to(DEVICE).float()
+
+            # Extract the concerned line of the empirical covariance.
+            cov_pushfwd = cross_covariance(
+                    ensemble_updated.cpu().numpy(),
+                    ensemble_updated.cpu().numpy()[:, obs_ind], rowvar=False).reshape(-1, 1)
+            cov_pushfwd = torch.from_numpy(cov_pushfwd).to(DEVICE).float()
             loc_obs_cov = torch.from_numpy(
-                    client.compute(loc_matrix[:, obs_ind]).result()).to(DEVICE).float()
+                    client.compute(localization_matrix[:, obs_ind]).result()).to(DEVICE).float()
 
             cov_pushfwd = torch.mul(
                     cov_pushfwd,
