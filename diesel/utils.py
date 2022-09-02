@@ -2,14 +2,13 @@
 
 """
 import numpy as np
-from numpy.core.numeric import array
+from numpy.core.numeric import array, dot
 from numpy import average
 
 import dask.array as da
 from dask.distributed import wait, progress
 
 
-from builtins import CLIENT as client
 
 CHUNK_REDUCTION_FACTOR = 4
 
@@ -71,19 +70,11 @@ def cholesky_invert(A, debug_string):
     # TEMP: try to compute to see if fails.
     try:
         R = da.linalg.cholesky(A_rechunked, lower=False)
-        R = client.persist(R)
-        wait(R)
-        print("Cholesky result.")
-        print(R.compute())
     except:
         print("Error in Cholesky")
         print(debug_string)
     try:
         R_inv = da.linalg.solve_triangular(R, da.linalg.eye(R.shape[0], chunks=chunk_size), lower=False)
-        R_inv = client.persist(R_inv)
-        wait(R_inv)
-        print("Solve result.")
-        print(R_inv.compute())
     except:
         print("Error in solve triangular")
         print(debug_string)
@@ -111,16 +102,16 @@ def svd_invert(A, svd_rank=None):
 
     return sqrt, inv
 
-def cross_covariance(X, Y, ddof=None, dtype=None):
+def cross_covariance(X, Y, bias=False, ddof=None, dtype=None, rowvar=True):
+    if not rowvar:
+        X = X.T
+        Y = Y.T
     if ddof is not None and ddof != int(ddof):
         raise ValueError(
             "ddof must be integer")
 
     if dtype is None:
-        if y is None:
-            dtype = np.result_type(m, np.float64)
-        else:
-            dtype = np.result_type(m, y, np.float64)
+        dtype = np.result_type(X, np.float64)
 
     X = array(X, ndmin=2, dtype=dtype)
     Y = array(Y, ndmin=2, dtype=dtype)
@@ -131,13 +122,14 @@ def cross_covariance(X, Y, ddof=None, dtype=None):
         else:
             ddof = 0
 
+    w = None
     avg_X, w_sum = average(X, axis=1, weights=w, returned=True)
     avg_Y, w_sum = average(Y, axis=1, weights=w, returned=True)
 
     fact = X.shape[1] - ddof
 
     # Subtract the mean.
-    X -= avg_Y[:, None]
+    X -= avg_X[:, None]
     Y -= avg_Y[:, None]
     
     Y_T = Y.T
