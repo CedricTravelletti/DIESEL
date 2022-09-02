@@ -1,6 +1,10 @@
 """ Helper functions for the DIESEL package.
 
 """
+import numpy as np
+from numpy.core.numeric import array
+from numpy import average
+
 import dask.array as da
 from dask.distributed import wait, progress
 
@@ -106,3 +110,37 @@ def svd_invert(A, svd_rank=None):
     inv = da.matmul(da.matmul(da.transpose(v), imat), da.transpose(u))
 
     return sqrt, inv
+
+def cross_covariance(X, Y, ddof=None, dtype=None):
+    if ddof is not None and ddof != int(ddof):
+        raise ValueError(
+            "ddof must be integer")
+
+    if dtype is None:
+        if y is None:
+            dtype = np.result_type(m, np.float64)
+        else:
+            dtype = np.result_type(m, y, np.float64)
+
+    X = array(X, ndmin=2, dtype=dtype)
+    Y = array(Y, ndmin=2, dtype=dtype)
+
+    if ddof is None:
+        if bias == 0:
+            ddof = 1
+        else:
+            ddof = 0
+
+    avg_X, w_sum = average(X, axis=1, weights=w, returned=True)
+    avg_Y, w_sum = average(Y, axis=1, weights=w, returned=True)
+
+    fact = X.shape[1] - ddof
+
+    # Subtract the mean.
+    X -= avg_Y[:, None]
+    Y -= avg_Y[:, None]
+    
+    Y_T = Y.T
+    c = dot(X, Y_T.conj())
+    c *= np.true_divide(1, fact)
+    return c.squeeze()
