@@ -68,10 +68,10 @@ def main():
     sampler = ds.sampling.SvdSampler(u, s)
     
     # Repeat the whole experiment several time for statistical analysis.
-    n_rep = 2
     ES_prior, ES_aao_loc, ES_seq_loc, ES_aao_truecov = [], [], [], []
     RE_aao_loc, RE_seq_loc, RE_aao_truecov = [], [], []
     RMSE_prior, RMSE_aao_loc, RMSE_seq_loc, RMSE_aao_truecov = [], [], [], []
+    n_rep = 20
     for rep in range(n_rep):
         print("Repetition {} / {}.".format(rep, n_rep))
         # Sample 30 ensemble members.
@@ -106,9 +106,10 @@ def main():
 
         # Perform covariance localization (use scaled version of base covariance to localize).
         # Maybe should persist here.
-        scaled_covariance_matrix = kernel.covariance_matrix(grid_pts, grid_pts, 
+        localization_matrix = kernel.covariance_matrix(grid_pts, grid_pts, 
                 lengthscales=da.from_array([2 * lambda0]))
-        loc_estimated_cov = localize_covariance(raw_estimated_cov, scaled_covariance_matrix)
+        localization_matrix = client.persist(localization_matrix)
+        loc_estimated_cov = localize_covariance(raw_estimated_cov, localization_matrix)
         loc_estimated_cov = client.persist(loc_estimated_cov)
     
         # Prepare some data by randomly selecting some points.
@@ -167,12 +168,8 @@ def main():
         # ------------------------
         # Sequential assimilation.
         # ------------------------
-        localizer_loc = lambda x: localize_covariance(ds.estimation.empirical_covariance(x), scaled_covariance_matrix)
-        localizer_raw = lambda x: ds.estimation.empirical_covariance(x)
-
         mean_updated_seq_loc, ensemble_updated_seq_loc = my_filter.update_ensemble_sequential_nondask(
-                mean, ensembles, G, y, data_std, raw_estimated_cov,
-                scaled_covariance_matrix)
+                mean, ensembles, G, y, data_std, localization_matrix)
 
         np.save(os.path.join(
                 results_folder, "mean_updated_seq_loc_{}.npy".format(rep)),
@@ -182,7 +179,7 @@ def main():
                 ensemble_updated_seq_loc)
 
         # Compute scores and save.
-        ES, _, _ = compute_energy_score(ensemble.compute(), ground_truth.compute())
+        ES, _, _ = compute_energy_score(ensembles.compute(), ground_truth.compute())
         ES_prior.append(ES)
 
         ES, _, _ = compute_energy_score(ensemble_updated_aao_loc.compute(), ground_truth.compute())
@@ -194,13 +191,13 @@ def main():
         ES, _, _ = compute_energy_score(ensemble_updated_aao_truecov.compute(), ground_truth.compute())
         ES_aao_truecov.append(ES)
 
-        RE = compute_RE_score(mean.compute(), mean_updated_aao_loc.compute(), ground_truth.compute())
+        RE = np.median(compute_RE_score(mean.compute(), mean_updated_aao_loc.compute(), ground_truth.compute()))
         RE_aao_loc.append(RE)
 
-        RE = compute_RE_score(mean.compute(), mean_updated_seq_loc, ground_truth.compute())
+        RE = np.median(compute_RE_score(mean.compute(), mean_updated_seq_loc, ground_truth.compute()))
         RE_seq_loc.append(RE)
 
-        RE = compute_RE_score(mean.compute(), mean_updated_aao_truecov.compute(), ground_truth.compute())
+        RE = np.median(compute_RE_score(mean.compute(), mean_updated_aao_truecov.compute(), ground_truth.compute()))
         RE_aao_truecov.append(RE)
 
         RMSE_prior.append(np.sqrt(np.mean((mean.compute() - ground_truth.compute())**2)))
@@ -208,11 +205,11 @@ def main():
         RMSE_seq_loc.append(np.sqrt(np.mean((mean_updated_seq_loc - ground_truth.compute())**2)))
         RMSE_aao_truecov.append(np.sqrt(np.mean((mean_updated_aao_truecov.compute() - ground_truth.compute())**2)))
 
-    df_results = pd.DataFrame({
-        'RMSE prior': RMSE_prior, 'RMSE aao loc': RMSE_aao_loc, 'RMSE seq loc': RMSE_seq_loc, 'RMSE aao truecov': RMSE_aao_truecov,
-        'ES prior': ES_prior, 'ES aao loc': ES_aao_loc, 'ES seq loc': ES_seq_loc, 'ES aao truecov': ES_aao_truecov,
-        'RE aao loc': RE_aao_loc, 'RE seq loc': RE_seq_loc, 'RE aao truecov': RE_aao_truecov})
-    df_results.to_pickle(os.path.join(results_folder, 'scores.pkl'))
+        df_results = pd.DataFrame({
+            'RMSE prior': RMSE_prior, 'RMSE aao loc': RMSE_aao_loc, 'RMSE seq loc': RMSE_seq_loc, 'RMSE aao truecov': RMSE_aao_truecov,
+            'ES prior': ES_prior, 'ES aao loc': ES_aao_loc, 'ES seq loc': ES_seq_loc, 'ES aao truecov': ES_aao_truecov,
+            'RE aao loc': RE_aao_loc, 'RE seq loc': RE_seq_loc, 'RE aao truecov': RE_aao_truecov})
+        df_results.to_pickle(os.path.join(results_folder, 'scores.pkl'))
 
 
 if __name__ == "__main__":
