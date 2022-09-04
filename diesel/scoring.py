@@ -1,6 +1,7 @@
 """ Scoring functions to evaluate quality of probabilistic forecasts.
 
 """
+import numpy as np
 import dask.array as da
 
 
@@ -27,7 +28,14 @@ def compute_RE_score(mean_prior, mean_updated, reference):
         Vector of RE scores at each location.
 
     """
-    mean_prior, mean_updated, reference = mean_prior.reshape(-1, 1), mean_updated.reshape(-1, 1), reference.reshape(-1, 1)
+    # Get rid of Nans.
+    mean_prior = mean_prior[~np.isnan(reference)]
+    mean_updated = mean_updated[~np.isnan(reference)]
+    reference = reference[~np.isnan(reference)]
+
+    # Make sure shapes agree.
+
+    mean_prior, mean_updated, reference = mean_prior.reshape(-1), mean_updated.reshape(-1), reference.reshape(-1)
     return 1 - (mean_updated - reference)**2 / (mean_prior - reference)**2
 
 def compute_CRPS(ensemble, reference):
@@ -56,6 +64,9 @@ def compute_CRPS(ensemble, reference):
         Vector of spreads (in the CRPS) at each location.
 
     """
+    ensemble = ensemble[:, ~np.isnan(reference)]
+    reference = reference[~np.isnan(reference)]
+
     n_members = ensemble.shape[0]
     misfit = (1 / n_members) * da.fabs(ensemble - reference.reshape(-1)[None, :]).sum(axis=0)
     spread = (1 / (2 * n_members**2)) * da.fabs(
@@ -89,6 +100,9 @@ def compute_energy_score(ensemble, reference):
         Spread term of the energy score (scalar).
 
     """
+    ensemble = ensemble[:, ~np.isnan(reference)]
+    reference = reference[~np.isnan(reference)]
+
     n_members = ensemble.shape[0]
     misfit = (1 / n_members) * da.linalg.norm(
             ensemble - reference.reshape(-1)[None, :], axis=1).sum(axis=0)
