@@ -212,7 +212,7 @@ class EnsembleKalmanFilter:
         # Add the mean to get ensemble from anomalies.
         ensemble_updated = mean_updated.reshape(-1)[None, :] + anomalies_updated
 
-        return mean_updated, ensemble_updated
+        return mean_updated.astype('float32'), ensemble_updated.astype('float32')
 
     def update_mean_sequential(self, mean, G, y, data_std, cov):
         """ Update the mean over a single period (step) by assimilating the 
@@ -353,7 +353,6 @@ class EnsembleKalmanFilter:
 
         # Loop over the data points and ingest sequentially.
         for i in range(G.shape[0]):
-            print(i)
             # One data points.
             G_seq = G_loc[i, :].reshape(1, -1)
             y_seq = y_loc[i].reshape(1, 1)
