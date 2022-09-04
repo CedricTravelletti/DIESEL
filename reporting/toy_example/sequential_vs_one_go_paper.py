@@ -200,10 +200,10 @@ def main():
         RE = np.median(compute_RE_score(mean.compute(), mean_updated_aao_truecov.compute(), ground_truth.compute()))
         RE_aao_truecov.append(RE)
 
-        RMSE_prior.append(np.sqrt(np.mean((mean.compute() - ground_truth.compute())**2)))
-        RMSE_aao_loc.append(np.sqrt(np.mean((mean_updated_aao_loc.compute() - ground_truth.compute())**2)))
-        RMSE_seq_loc.append(np.sqrt(np.mean((mean_updated_seq_loc - ground_truth.compute())**2)))
-        RMSE_aao_truecov.append(np.sqrt(np.mean((mean_updated_aao_truecov.compute() - ground_truth.compute())**2)))
+        RMSE_prior.append(np.sqrt(np.mean((mean.compute().reshape(-1, 1) - ground_truth.compute().reshape(-1, 1))**2)))
+        RMSE_aao_loc.append(np.sqrt(np.mean((mean_updated_aao_loc.compute().reshape(-1, 1) - ground_truth.compute().reshape(-1, 1))**2)))
+        RMSE_seq_loc.append(np.sqrt(np.mean((mean_updated_seq_loc.reshape(-1, 1) - ground_truth.compute().reshape(-1, 1))**2)))
+        RMSE_aao_truecov.append(np.sqrt(np.mean((mean_updated_aao_truecov.compute().reshape(-1, 1) - ground_truth.compute().reshape(-1, 1))**2)))
 
         df_results = pd.DataFrame({
             'RMSE prior': RMSE_prior, 'RMSE aao loc': RMSE_aao_loc, 'RMSE seq loc': RMSE_seq_loc, 'RMSE aao truecov': RMSE_aao_truecov,
