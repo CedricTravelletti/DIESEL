@@ -110,3 +110,29 @@ def compute_energy_score(ensemble, reference):
             ensemble[None, :, :] - ensemble[:, None, :], axis=2).sum(axis=0).sum(axis=0)
     energy_score = misfit - spread
     return energy_score, misfit, spread
+
+def compute_RMSE(mean_updated, reference):
+    """ Root mean square error.
+
+    Parameters
+    ----------
+    mean_updated: dask.array (m)
+        Vector of mean elements after updating.
+    reference: dask.array (m)
+        Ground truth to be reconstructed.
+
+    Returns
+    -------
+    RMSE: float
+
+    """
+    # Get rid of Nans.
+    mean_updated = mean_updated[~np.isnan(reference)]
+    reference = reference[~np.isnan(reference)]
+
+    # Make sure shapes agree.
+    mean_updated, reference = mean_updated.reshape(-1), reference.reshape(-1)
+    rmse = np.sqrt(np.mean((mean_updated - reference)**2))
+    if isinstance(rmse, np.ndarray): rmse = rmse[0]
+
+    return rmse
