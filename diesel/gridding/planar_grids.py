@@ -74,7 +74,8 @@ class SquareGrid:
 
     def plot_vals(self, vals_list, ax, points=None, points_color='black',
             vmin=None, vmax=None,
-            fig=None, colorbar=False):
+            fig=None, colorbar=False,
+            cmap='jet'):
         dx = (self.X[1, 0]-self.X[0, 0])/2.
         dy = (self.Y[0, 1]-self.Y[0, 0])/2
         extent = extent = [
@@ -82,7 +83,7 @@ class SquareGrid:
                 self.Y[0, -1]+dy, self.Y[0, 0]-dy]
 
         im = ax.imshow(self.list_to_mesh(vals_list).T,
-                cmap='jet', extent=extent,
+                cmap=cmap, extent=extent,
                 vmin=vmin, vmax=vmax)
 
         if points is not None:
