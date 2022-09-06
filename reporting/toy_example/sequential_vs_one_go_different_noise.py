@@ -19,7 +19,7 @@ import time
 
 
 # results_folder ="/home/cedric/PHD/Dev/DIESEL/reporting/toy_example/results/"
-results_folder ="/storage/homefs/ct19x463/Dev/DIESEL/reporting/toy_example/results_paper/synthetic/"
+results_folder ="/storage/homefs/ct19x463/Dev/DIESEL/reporting/toy_example/results_paper/synthetic_different_noise/"
 
 
 def main():
