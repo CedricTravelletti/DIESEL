@@ -8,6 +8,7 @@ from numpy import average
 import dask.array as da
 from dask.distributed import wait, progress
 
+from climate.utils import match_vectors_indices
 
 
 CHUNK_REDUCTION_FACTOR = 4
@@ -136,3 +137,39 @@ def cross_covariance(X, Y, bias=False, ddof=None, dtype=None, rowvar=True):
     c = dot(X, Y_T.conj())
     c *= np.true_divide(1, fact)
     return c.squeeze()
+
+def build_forward_mean_per_cell(mean_ds, data_ds):
+    """ Build the forward operator corresponding to a given 
+    model grid and data point cloud. 
+    This function only assimilated the mean observed value in each cell.
+
+    Parameters
+    ----------
+    mean_ds: xr.DataArray
+    data_ds: xr.DataArray
+
+    Returns
+    -------
+    G_mean: (n_data_mean, n_cells)
+        Forward operator for assimilation of mean data in each cell.
+    mean_datas (n_data_mean)
+        Vector of mean observed data in each cell.
+
+
+    """
+    # Get the model cell index corresponding to each observations.
+    matched_inds = match_vectors_indices(mean_ds, data_ds)
+
+    # Get unique indices. For the ones that appear several time, 
+    # we will assimilat the mean. I.e. we assimilat the mean observed data 
+    # in each cell where we have observations.
+    unique_indices = np.unique(matched_inds)
+    mean_datas = [np.mean(data_ds.values[matched_inds == i]) for i in unique_indices]
+
+    data_lats = mean_ds.latitude[unique_indices]
+    data_lons = mean_ds.longitude[unique_indices]
+
+    G = np.zeros((unique_indices.shape[0], mean_ds.shape[0]))
+    for i in range(unique_indices.shape[0]):
+        G[i, unique_indices[i]] = 1.0
+    return G, mean_datas, data_lons, data_lats
