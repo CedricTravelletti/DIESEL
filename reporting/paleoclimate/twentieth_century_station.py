@@ -83,7 +83,7 @@ dates, months, years = [], [], []
 
 
 # Loop over years.
-for year in range(1990, 2000):
+for year in range(1993, 2000):
 ## Loop over months.
     for month in ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']:
         # Prepare vectors.
@@ -146,7 +146,7 @@ for year in range(1990, 2000):
         # Assimilate sequential.
         # ----------------------
         mean_updated_seq_loc, ensemble_updated_seq_loc = my_filter.update_ensemble_sequential_nondask(
-                mean_ds.data, ensemble_ds.data, G_mean,
+                anomaly.data, ensemble_anomaly, G_mean,
                 d_mean, data_std, localization_matrix)
     
         # Save data.
@@ -206,28 +206,25 @@ for year in range(1990, 2000):
         stacked_ensemble_updated_aao_loc = ensemble_updated_aao_loc.compute()
         stacked_ensemble_updated_seq_loc = ensemble_updated_seq_loc
 
-        ES, _, _ = compute_energy_score(stacked_prior_ens, stacked_ref, min_lat=-70.0, max_lat=70.0)
+        ES, _, _ = compute_energy_score(stacked_prior_ens, stacked_ref, min_lat=-70, max_lat=70)
         ES_prior.append(ES)                                                     
                                                                                 
-        ES, _, _ = compute_energy_score(stacked_ensemble_updated_aao_loc, stacked_ref, min_lat=-70.0, max_lat=70.0)
+        ES, _, _ = compute_energy_score(stacked_ensemble_updated_aao_loc, stacked_ref, min_lat=-70, max_lat=70)
         ES_aao_loc.append(ES)                                                   
                                                                                 
-        ES, _, _ = compute_energy_score(stacked_ensemble_updated_seq_loc, stacked_ref, min_lat=-70.0, max_lat=70.0)
+        ES, _, _ = compute_energy_score(stacked_ensemble_updated_seq_loc, stacked_ref, min_lat=-70, max_lat=70)
         ES_seq_loc.append(ES)                                                   
            
-        RE_score_map = compute_RE_score(stacked_prior, stacked_mean_updated_aao_loc, stacked_ref,
-                min_lat=-70, max_lat=70)
+        RE_score_map = compute_RE_score(stacked_prior, stacked_mean_updated_aao_loc, stacked_ref, min_lat=-70, max_lat=70)
         RE = np.median(RE_score_map)
         RE_aao_loc.append(RE)                                                   
                                                                                 
-        RE_score_map = compute_RE_score(stacked_prior, stacked_mean_updated_seq_loc, stacked_ref,
-            min_lat=-70, max_lat=70)
-        RE = np.median(RE_score_map)
+        RE = np.median(compute_RE_score(stacked_prior, stacked_mean_updated_seq_loc, stacked_ref, min_lat=-70, max_lat=70))
         RE_seq_loc.append(RE)                                                                                       
 
-        RMSE_prior.append(compute_RMSE(stacked_prior, stacked_ref, min_lat=-70.0, max_lat=70.0))
-        RMSE_aao_loc.append(compute_RMSE(stacked_mean_updated_aao_loc, stacked_ref, min_lat=-70.0, max_lat=70.0))
-        RMSE_seq_loc.append(compute_RMSE(stacked_mean_updated_seq_loc, stacked_ref, min_lat=-70.0, max_lat=70.0))
+        RMSE_prior.append(compute_RMSE(stacked_prior, stacked_ref, min_lat=-70, max_lat=70))
+        RMSE_aao_loc.append(compute_RMSE(stacked_mean_updated_aao_loc, stacked_ref, min_lat=-70, max_lat=70))
+        RMSE_seq_loc.append(compute_RMSE(stacked_mean_updated_seq_loc, stacked_ref, min_lat=-70, max_lat=70))
         
         dates.append(assimilation_date), months.append(month), years.append(year)
                                                                                 
@@ -237,3 +234,4 @@ for year in range(1990, 2000):
                 'ES prior': ES_prior, 'ES aao loc': ES_aao_loc, 'ES seq loc': ES_seq_loc,
                 'RE aao loc': RE_aao_loc, 'RE seq loc': RE_seq_loc})
         df_results.to_pickle(os.path.join(results_folder, 'scores.pkl'))
+
