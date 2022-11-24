@@ -165,6 +165,11 @@ def build_forward_mean_per_cell(mean_ds, data_ds):
     # in each cell where we have observations.
     unique_indices = np.unique(matched_inds)
     mean_datas = [np.mean(data_ds.values[matched_inds == i]) for i in unique_indices]
+    median_datas = [np.median(data_ds.values[matched_inds == i]) for i in unique_indices]
+    std_datas = [np.std(data_ds.values[matched_inds == i]) for i in unique_indices]
+    n_datas = [len(data_ds.values[matched_inds == i]) for i in unique_indices]
+
+    mean_datas, median_datas, std_datas, n_datas = np.array(mean_datas), np.array(median_datas), np.array(std_datas), np.array(n_datas)
 
     data_lats = mean_ds.latitude[unique_indices]
     data_lons = mean_ds.longitude[unique_indices]
@@ -172,4 +177,4 @@ def build_forward_mean_per_cell(mean_ds, data_ds):
     G = np.zeros((unique_indices.shape[0], mean_ds.shape[0]))
     for i in range(unique_indices.shape[0]):
         G[i, unique_indices[i]] = 1.0
-    return G, mean_datas, data_lons, data_lats
+    return G, mean_datas, std_datas, median_datas, n_datas, data_lons, data_lats
