@@ -5,7 +5,7 @@ from dask.distributed import Client
 import diesel as ds
 from diesel.kalman_filtering import EnsembleKalmanFilter
 from diesel.estimation import localize_covariance
-from diesel.utils import compute_RE_score
+from diesel.scoring import compute_RE_score
 
 
 def main():
@@ -16,9 +16,13 @@ def main():
     # Build a square grid with 30^2 elements.
     grid = ds.gridding.SquareGrid(n_pts_1d=60)
     grid_pts = grid.grid_pts
+
+    # TODO.
+    grid_pts = 90 * grid_pts
     
     # Construct (lazy) covariance matrix.
-    lazy_covariance_matrix = ds.covariance.matern32(grid_pts, lambda0=0.1)
+    kernel = ds.covariance.matern32(lengthscales=da.from_array([0.1]))
+    lazy_covariance_matrix = kernel.covariance_matrix(grid_pts, grid_pts, metric='haversine')
     
     # Compute compressed SVD.
     svd_rank = 900 # Since our matrix is 900 * 900 this will be a full SVD.
