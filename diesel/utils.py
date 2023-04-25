@@ -11,6 +11,10 @@ from dask.distributed import wait, progress
 from climate.utils import match_vectors_indices
 
 
+# Get the client stored in the global variable.
+from builtins import CLIENT as global_client
+
+
 CHUNK_REDUCTION_FACTOR = 4
 
 def find_closest_multiple(x, base):
@@ -86,7 +90,7 @@ def cholesky_invert(A, debug_string):
         R_inv = R_inv[:-shape_diff, :-shape_diff]
     return da.transpose(R), da.matmul(R_inv, da.transpose(R_inv))
 
-def svd_invert(A, svd_rank=None):
+def svd_invert(A, svd_rank=None, client=global_client):
     if svd_rank is None: svd_rank = A.shape[0]
     # Compute compressed SVD.
     # WARNING: dask return the already transposed version of v, 
@@ -94,6 +98,8 @@ def svd_invert(A, svd_rank=None):
     # This is poorly documented in dask.
     u, s, v = da.linalg.svd_compressed(
                     A, k=svd_rank, compute=True) 
+    u, s, v = client.persist(u), client.persist(s), client.persist(v)
+
     # Compute (symmetric) square root.
     smat = da.diag(da.sqrt(s))
     sqrt = da.matmul(da.matmul(u, smat), da.transpose(u))
