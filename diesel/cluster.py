@@ -31,7 +31,7 @@ def UbelixCluster(n_nodes, mem_per_node=16, cores_per_node=1,
         cores=cores_per_node,
         memory=mem_per_node,
         death_timeout=6000,
-        walltime="02:00:00",
+        walltime="06:00:00",
         job_extra=['--qos="{}"'.format(qos), '--partition="{}"'.format(partition)]
     )
 
