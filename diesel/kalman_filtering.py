@@ -12,7 +12,7 @@ from diesel.utils import cholesky_invert, svd_invert, cross_covariance
 
 import time
 
-from builtins import CLIENT as client
+from builtins import CLIENT as global_client
 
 # Use torch for the sequential updating (which is done entirely on the scheduler.
 import torch
@@ -86,7 +86,8 @@ class EnsembleKalmanFilter:
         _, inv = cholesky_invert(to_invert)
         return self._update_mean(mean, G, y, cov_pushfwd, inv)
 
-    def _update_anomalies(self, mean, ensemble, G, data_std, cov_pushfwd, sqrt):
+    def _update_anomalies(self, mean, ensemble, G, data_std, cov_pushfwd, sqrt,
+            svd_rank=1000):
         """ Helper function for updating the ensemble members over a single period (step).
         This function assumes that the compute intensive intermediate matrices 
         have already been computed.
@@ -117,11 +118,12 @@ class EnsembleKalmanFilter:
         anomalies = ensemble - mean.reshape(-1)[None, :]
 
         # First compute the inverse of the sqrt.
-        _, inv_sqrt = svd_invert(sqrt)
+        _, inv_sqrt = svd_invert(sqrt, svd_rank=svd_rank, client=global_client)
 
         # TODO: Just trying to see where it goes wrong.
         # Inverese of the other matrix involved.
-        _, inv_2 = svd_invert(sqrt + data_std * eye(G.shape[0]))
+        _, inv_2 = svd_invert(sqrt + data_std * eye(G.shape[0]),
+                svd_rank=svd_rank, client=global_client)
         kalman_gain_tilde = matmul(cov_pushfwd,
                 matmul(inv_sqrt.T, inv_2))
 
@@ -174,7 +176,8 @@ class EnsembleKalmanFilter:
         # We remove the last dimension before returning.
         return anomalies_updated.squeeze(-1)
 
-    def update_ensemble(self, mean, ensemble, G, y, data_std, cov):
+    def update_ensemble(self, mean, ensemble, G, y, data_std, cov,
+            svd_rank=1000):
         """ Update an ensemble over a single period (step).
 
         Parameters
@@ -203,10 +206,12 @@ class EnsembleKalmanFilter:
         data_cov = data_std**2 * eye(y.shape[0])
         to_invert = matmul(G, cov_pushfwd) + data_cov
 
-        sqrt, inv = svd_invert(to_invert)
+        sqrt, inv = svd_invert(to_invert,
+                svd_rank=svd_rank, client=global_client)
 
         anomalies_updated = self._update_anomalies(
-                mean, ensemble, G, data_std, cov_pushfwd, sqrt)
+                mean, ensemble, G, data_std, cov_pushfwd, sqrt,
+                svd_rank=svd_rank)
         mean_updated = self._update_mean(mean, G, y, cov_pushfwd, inv)
 
         # Add the mean to get ensemble from anomalies.
@@ -249,7 +254,7 @@ class EnsembleKalmanFilter:
 
             # Have to execute once in a while, otherwise graph gets too big.
             if i % 100 == 0:
-                mean_updated = client.persist(mean_updated)
+                mean_updated = global_client.persist(mean_updated)
         return mean_updated
 
     def update_mean_sequential_nondask(self, mean, G, y, data_std, cov):
@@ -275,14 +280,14 @@ class EnsembleKalmanFilter:
         update_mean: dask.array (m, 1) (lazy)
 
         """
-        mean_updated = client.compute(mean).result().reshape(-1, 1)
+        mean_updated = global_client.compute(mean).result().reshape(-1, 1)
         # Compute pushforward once and for all. extract lines later.
-        cov_pushfwd_full = client.persist(cov @ transpose(G))
+        cov_pushfwd_full = global_client.persist(cov @ transpose(G))
         wait(cov_pushfwd_full)
 
         # Repatriate y to the local process.
-        y = client.compute(y).result().reshape(-1, 1)
-        G = client.compute(G).result()
+        y = global_client.compute(y).result().reshape(-1, 1)
+        G = global_client.compute(G).result()
 
         # Send the important stuff to torch.
         y = torch.from_numpy(y).to(DEVICE).float()
@@ -295,7 +300,7 @@ class EnsembleKalmanFilter:
             # and send it to the GPU.
             if i % 500 == 0:
                 i_pushfwd_start = i # The index at which the local pushfwd starts.
-                local_pushfwd = client.compute(cov_pushfwd_full[:,i:i+500]).result()
+                local_pushfwd = global_client.compute(cov_pushfwd_full[:,i:i+500]).result()
                 local_pushfwd = torch.from_numpy(local_pushfwd).to(DEVICE).float()
 
             # One data points.
@@ -338,12 +343,12 @@ class EnsembleKalmanFilter:
         update_mean: dask.array (m, 1) (lazy)
 
         """
-        mean_updated = client.compute(mean).result().reshape(-1, 1)
-        ensemble_updated = client.compute(ensemble).result()
+        mean_updated = global_client.compute(mean).result().reshape(-1, 1)
+        ensemble_updated = global_client.compute(ensemble).result()
 
         # Repatriate y to the local process.
-        y_loc = client.compute(y).result().reshape(-1, 1)
-        G_loc = client.compute(G).result()
+        y_loc = global_client.compute(y).result().reshape(-1, 1)
+        G_loc = global_client.compute(G).result()
 
         # Send the important stuff to torch.
         y_loc = torch.from_numpy(y_loc).to(DEVICE).float()
@@ -368,7 +373,7 @@ class EnsembleKalmanFilter:
                     ensemble_updated.cpu().numpy()[:, obs_ind], rowvar=False).reshape(-1, 1)
             cov_pushfwd = torch.from_numpy(cov_pushfwd).to(DEVICE).float()
             loc_obs_cov = torch.from_numpy(
-                    client.compute(localization_matrix[:, obs_ind]).result()).to(DEVICE).float()
+                    global_client.compute(localization_matrix[:, obs_ind]).result()).to(DEVICE).float()
 
             cov_pushfwd = torch.mul(
                     cov_pushfwd,
@@ -448,8 +453,8 @@ class EnsembleKalmanFilter:
                 elapsed_time = now - last_time
                 last_time = now
                 print("Time since last persisting: {}.".format(elapsed_time))
-                mean_updated = client.persist(mean_updated)
-                ensemble_updated = client.persist(ensemble_updated)
+                mean_updated = global_client.persist(mean_updated)
+                ensemble_updated = global_client.persist(ensemble_updated)
                 wait(ensemble_updated)
 
                 # Repatriate locally, so we can cancel running tasks 
@@ -459,12 +464,12 @@ class EnsembleKalmanFilter:
                 ensemble_tmp = ensemble_updated.compute()
 
                 # Cancel cached stuff to clean memory.
-                client.cancel(mean_updated)
-                client.cancel(ensemble_updated)
-                client.cancel(cov_est)
+                global_client.cancel(mean_updated)
+                global_client.cancel(ensemble_updated)
+                global_client.cancel(cov_est)
 
                 # After cancellation can re-send to the cluster.
-                mean_updated = client.persist(da.from_array(mean_tmp))
-                ensemble_updated = client.persist(da.from_array(ensemble_tmp))
+                mean_updated = global_client.persist(da.from_array(mean_tmp))
+                ensemble_updated = global_client.persist(da.from_array(ensemble_tmp))
 
         return mean_updated, ensemble_updated
