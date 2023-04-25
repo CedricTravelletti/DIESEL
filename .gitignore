@@ -8,6 +8,8 @@ __pycache__/
 *.pkl
 dask-worker-space/
 slurm*
+*.c
+reporting/
 
 # C extensions
 *.so
