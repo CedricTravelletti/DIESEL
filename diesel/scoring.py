@@ -5,7 +5,7 @@ import numpy as np
 import dask.array as da
 
 
-def compute_RE_score(mean_prior, mean_updated, reference):
+def compute_RE_score(mean_prior, mean_updated, reference, min_lat=-90, max_lat=90):
     """ Reduction of error skill score.
     This score compares a base prediction (mean_prior) with an enhanced prediction (mean_updated). 
     If the enhanced prediction predicts the reference better than the base one, then the score 
@@ -19,8 +19,16 @@ def compute_RE_score(mean_prior, mean_updated, reference):
         Vector of mean elements prior to the updating.
     mean_updated: dask.array (m)
         Vector of mean elements after updating.
-    reference: dask.array (m)
+    reference: xarray.Dataset (m)
         Ground truth to be reconstructed.
+        Should be provided in dataset format in order to include 
+        spatial information.
+    min_lat: float, defaults to None.
+        If specified, ignore the refions of low latitude 
+        in the computation of the mismatch.
+    max_lat: float, defaults to None.
+        If specified, ignore the refions of high latitude 
+        in the computation of the mismatch.
 
     Returns
     -------
@@ -28,6 +36,14 @@ def compute_RE_score(mean_prior, mean_updated, reference):
         Vector of RE scores at each location.
 
     """
+    # Filter out high/low latitude if provided.
+    lat_filter_inds = (reference.latitude < max_lat).data & (reference.latitude > min_lat).data
+    reference = reference.data
+
+    mean_prior = mean_prior[lat_filter_inds]
+    mean_updated = mean_updated[lat_filter_inds]
+    reference = reference[lat_filter_inds]
+
     # Get rid of Nans.
     mean_prior = mean_prior[~np.isnan(reference)]
     mean_updated = mean_updated[~np.isnan(reference)]
@@ -36,9 +52,11 @@ def compute_RE_score(mean_prior, mean_updated, reference):
     # Make sure shapes agree.
 
     mean_prior, mean_updated, reference = mean_prior.reshape(-1), mean_updated.reshape(-1), reference.reshape(-1)
-    return 1 - (mean_updated - reference)**2 / (mean_prior - reference)**2
 
-def compute_CRPS(ensemble, reference):
+    RE_score = 1 - np.mean((mean_updated - reference)**2) / np.mean((mean_prior - reference)**2)
+    return RE_score
+
+def compute_CRPS(ensemble, reference, min_lat=-90, max_lat=90):
     """ Computes the continuous ranked probability score (CRPS).
     This scores evaluates how well a probabilistic forecast (given by an ensemble) 
     predicts a given reference. The CRPS is relative in the sense that it is used to 
@@ -53,6 +71,12 @@ def compute_CRPS(ensemble, reference):
         Collection of prediction vectors.
     reference: dask.array (m)
         Ground truth to be reconstructed.
+    min_lat: float, defaults to None.
+        If specified, ignore the refions of low latitude 
+        in the computation of the mismatch.
+    max_lat: float, defaults to None.
+        If specified, ignore the refions of high latitude 
+        in the computation of the mismatch.
 
     Returns
     -------
@@ -74,7 +98,7 @@ def compute_CRPS(ensemble, reference):
     CRPS =  misfit -  spread
     return CRPS, misfit, spread
 
-def compute_energy_score(ensemble, reference):
+def compute_energy_score(ensemble, reference, min_lat=-90, max_lat=90):
     """ Computes energy score (multivariate generalisation of the CRPS".
     This scores evaluates how well a probabilistic forecast (given by an ensemble) 
     predicts a given reference. The energy score is relative in the sense that it is used to 
@@ -89,6 +113,12 @@ def compute_energy_score(ensemble, reference):
         Collection of prediction vectors.
     reference: dask.array (m)
         Ground truth to be reconstructed.
+    min_lat: float, defaults to None.
+        If specified, ignore the refions of low latitude 
+        in the computation of the mismatch.
+    max_lat: float, defaults to None.
+        If specified, ignore the refions of high latitude 
+        in the computation of the mismatch.
 
     Returns
     -------
@@ -100,6 +130,14 @@ def compute_energy_score(ensemble, reference):
         Spread term of the energy score (scalar).
 
     """
+    # Filter out high/low latitude if provided.
+    lat_filter_inds = (reference.latitude < max_lat).data & (reference.latitude > min_lat).data
+    reference = reference.data
+
+    ensemble = ensemble[:, lat_filter_inds]
+    reference = reference[lat_filter_inds]
+
+    # Get rid of Nans.
     ensemble = ensemble[:, ~np.isnan(reference)]
     reference = reference[~np.isnan(reference)]
 
@@ -111,7 +149,7 @@ def compute_energy_score(ensemble, reference):
     energy_score = misfit - spread
     return energy_score, misfit, spread
 
-def compute_RMSE(mean_updated, reference):
+def compute_RMSE(mean_updated, reference, min_lat=-90, max_lat=90):
     """ Root mean square error.
 
     Parameters
@@ -120,12 +158,25 @@ def compute_RMSE(mean_updated, reference):
         Vector of mean elements after updating.
     reference: dask.array (m)
         Ground truth to be reconstructed.
+    min_lat: float, defaults to None.
+        If specified, ignore the refions of low latitude 
+        in the computation of the mismatch.
+    max_lat: float, defaults to None.
+        If specified, ignore the refions of high latitude 
+        in the computation of the mismatch.
 
     Returns
     -------
     RMSE: float
 
     """
+    # Filter out high/low latitude if provided.
+    lat_filter_inds = (reference.latitude < max_lat).data & (reference.latitude > min_lat).data
+    reference = reference.data
+
+    mean_updated = mean_updated[lat_filter_inds]
+    reference = reference[lat_filter_inds]
+
     # Get rid of Nans.
     mean_updated = mean_updated[~np.isnan(reference)]
     reference = reference[~np.isnan(reference)]
