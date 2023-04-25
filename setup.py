@@ -1,7 +1,7 @@
 from setuptools import setup
 from setuptools import find_packages
 from distutils.cmd import Command
-from distutils.extension import Extension
+from setuptools.extension import Extension
 import os
 import sys
 import io
@@ -15,8 +15,8 @@ dist.Distribution().fetch_build_eggs(['Cython>=0.29.15', 'numpy>=1.18.0'])
 
 import numpy as np
 from Cython.Build import cythonize
-import Cython.Compiler.Options
-Cython.Compiler.Options.annotate = True
+# import Cython.Compiler.Options
+# Cython.Compiler.Options.annotate = True
 
 if "--line_trace" in sys.argv:
     line_trace = True
@@ -37,11 +37,7 @@ URL = 'https://github.com/CedricTravelletti/DIESEL'
 requirements = "requirements.txt"
 
 ext_modules = [
-    # "climate/distances.pyx",
-    # "volcapy/kernels/exponential.pyx",
-    # "volcapy/niklas/banerjee.pyx",
-    # "volcapy/niklas/banerjee2d.pyx",
-    # "volcapy/grid/covariance_tools.pyx",
+    "diesel/haversine.pyx",
 ]
 
 
@@ -76,12 +72,14 @@ setup(
     author=AUTHOR,
     author_email=AUTHOR_EMAIL,
     url=URL,
-    packages=find_packages(),
+    # packages=find_packages(),
+    packages=['diesel' 'diesel.haversine'],
     include_package_data=False,
     install_requires=[# io.open(requirements, encoding='utf8').read(),
             # 'mvnorm @ git+https://github.com/CedricTravelletti/torch-mvnorm.git#egg=mvnorm'
             ],
     classifiers=[],
-    ext_modules=ext_modules_settings,
-    include_dirs=[np.get_include()],
+    # ext_modules=ext_modules_settings,
+    ext_modules=cythonize([Extension("diesel.haversine", sources=["diesel/haversine.pyx"])]),
+    include_dirs=[np.get_include(), '.', './diesel/'],
 )
