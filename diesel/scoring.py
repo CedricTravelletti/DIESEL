@@ -11,15 +11,17 @@ def compute_RE_score(mean_prior, mean_updated, reference, min_lat=-90, max_lat=9
     If the enhanced prediction predicts the reference better than the base one, then the score 
     is > 0, the score being 1 if the reconstruction is perfect.
 
+    Note that this score averages over times steps and produces a spatial map.
+
     See Valler et al., Impact of different estimations of the background-error covariance matrix on climate reconstructions based on data assimilation (2019).
 
     Parameters
     ----------
-    mean_prior: dask.array (m)
+    mean_prior: dask.array (m, t)
         Vector of mean elements prior to the updating.
-    mean_updated: dask.array (m)
+    mean_updated: dask.array (m,t)
         Vector of mean elements after updating.
-    reference: xarray.Dataset (m)
+    reference: xarray.Dataset (m, t)
         Ground truth to be reconstructed.
         Should be provided in dataset format in order to include 
         spatial information.
