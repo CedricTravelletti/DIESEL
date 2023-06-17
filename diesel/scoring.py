@@ -5,21 +5,23 @@ import numpy as np
 import dask.array as da
 
 
-def compute_RE_score(mean_prior, mean_updated, reference, min_lat=-90, max_lat=90):
+def compute_RE_score(mean_prior, mean_updated, reference, min_lat=None, max_lat=None):
     """ Reduction of error skill score.
     This score compares a base prediction (mean_prior) with an enhanced prediction (mean_updated). 
     If the enhanced prediction predicts the reference better than the base one, then the score 
     is > 0, the score being 1 if the reconstruction is perfect.
 
+    Note that this score averages over times steps and produces a spatial map.
+
     See Valler et al., Impact of different estimations of the background-error covariance matrix on climate reconstructions based on data assimilation (2019).
 
     Parameters
     ----------
-    mean_prior: dask.array (m)
+    mean_prior: dask.array (m, t)
         Vector of mean elements prior to the updating.
-    mean_updated: dask.array (m)
+    mean_updated: dask.array (m,t)
         Vector of mean elements after updating.
-    reference: xarray.Dataset (m)
+    reference: xarray.Dataset (m, t)
         Ground truth to be reconstructed.
         Should be provided in dataset format in order to include 
         spatial information.
@@ -37,12 +39,16 @@ def compute_RE_score(mean_prior, mean_updated, reference, min_lat=-90, max_lat=9
 
     """
     # Filter out high/low latitude if provided.
-    lat_filter_inds = (reference.latitude < max_lat).data & (reference.latitude > min_lat).data
-    reference = reference.data
+    if min_lat is not None:
+        lat_filter_inds = (reference.latitude < max_lat).data & (reference.latitude > min_lat).data
+        mean_prior = mean_prior[lat_filter_inds]
+        mean_updated = mean_updated[lat_filter_inds]
+        reference = reference[lat_filter_inds]
 
-    mean_prior = mean_prior[lat_filter_inds]
-    mean_updated = mean_updated[lat_filter_inds]
-    reference = reference[lat_filter_inds]
+    # If reference is a nested object (like an xarray or a dask.array), 
+    # get the underlying data.
+    if hasattr(reference, 'to_numpy'):
+        reference = reference.to_numpy()
 
     # Get rid of Nans.
     mean_prior = mean_prior[~np.isnan(reference)]
@@ -56,7 +62,7 @@ def compute_RE_score(mean_prior, mean_updated, reference, min_lat=-90, max_lat=9
     RE_score = 1 - np.mean((mean_updated - reference)**2) / np.mean((mean_prior - reference)**2)
     return RE_score
 
-def compute_CRPS(ensemble, reference, min_lat=-90, max_lat=90):
+def compute_CRPS(ensemble, reference, min_lat=None, max_lat=None):
     """ Computes the continuous ranked probability score (CRPS).
     This scores evaluates how well a probabilistic forecast (given by an ensemble) 
     predicts a given reference. The CRPS is relative in the sense that it is used to 
@@ -98,7 +104,7 @@ def compute_CRPS(ensemble, reference, min_lat=-90, max_lat=90):
     CRPS =  misfit -  spread
     return CRPS, misfit, spread
 
-def compute_energy_score(ensemble, reference, min_lat=-90, max_lat=90):
+def compute_energy_score(ensemble, reference, min_lat=None, max_lat=None):
     """ Computes energy score (multivariate generalisation of the CRPS".
     This scores evaluates how well a probabilistic forecast (given by an ensemble) 
     predicts a given reference. The energy score is relative in the sense that it is used to 
@@ -131,11 +137,15 @@ def compute_energy_score(ensemble, reference, min_lat=-90, max_lat=90):
 
     """
     # Filter out high/low latitude if provided.
-    lat_filter_inds = (reference.latitude < max_lat).data & (reference.latitude > min_lat).data
-    reference = reference.data
+    if min_lat is not None:
+        lat_filter_inds = (reference.latitude < max_lat).data & (reference.latitude > min_lat).data
+        ensemble = ensemble[:, lat_filter_inds]
+        reference = reference[lat_filter_inds]
 
-    ensemble = ensemble[:, lat_filter_inds]
-    reference = reference[lat_filter_inds]
+    # If reference is a nested object (like an xarray or a dask.array), 
+    # get the underlying data.
+    if hasattr(reference, 'to_numpy'):
+        reference = reference.to_numpy()
 
     # Get rid of Nans.
     ensemble = ensemble[:, ~np.isnan(reference)]
@@ -149,7 +159,7 @@ def compute_energy_score(ensemble, reference, min_lat=-90, max_lat=90):
     energy_score = misfit - spread
     return energy_score, misfit, spread
 
-def compute_RMSE(mean_updated, reference, min_lat=-90, max_lat=90):
+def compute_RMSE(mean_updated, reference, min_lat=None, max_lat=None):
     """ Root mean square error.
 
     Parameters
@@ -171,11 +181,15 @@ def compute_RMSE(mean_updated, reference, min_lat=-90, max_lat=90):
 
     """
     # Filter out high/low latitude if provided.
-    lat_filter_inds = (reference.latitude < max_lat).data & (reference.latitude > min_lat).data
-    reference = reference.data
+    if min_lat is not None:
+        lat_filter_inds = (reference.latitude < max_lat).data & (reference.latitude > min_lat).data
+        mean_updated = mean_updated[lat_filter_inds]
+        reference = reference[lat_filter_inds]
 
-    mean_updated = mean_updated[lat_filter_inds]
-    reference = reference[lat_filter_inds]
+    # If reference is a nested object (like an xarray or a dask.array), 
+    # get the underlying data.
+    if hasattr(reference, 'to_numpy'):
+        reference = reference.to_numpy()
 
     # Get rid of Nans.
     mean_updated = mean_updated[~np.isnan(reference)]
