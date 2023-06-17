@@ -12,18 +12,20 @@ import seaborn as sns
 sns.set()
 sns.set_style("white")
 # plt.rcParams["font.family"] = "Helvetica"
-plt.rcParams["font.family"] = ["Arial"]
+sns.set()
+sns.set_style("white")
+plt.rcParams["font.family"] = "serif"
 plot_params = {
-        'font.size': 10, 'font.style': 'normal',
-        'axes.labelsize': 'small',
-        'axes.titlesize':'small',
-        'legend.fontsize': 'small',
-        'xtick.labelsize': 'small',
-        'ytick.labelsize': 'small',
+        'font.size': 18, 'font.style': 'normal',
+        'axes.labelsize': 'x-small',
+        'axes.titlesize':'x-small',
+        'legend.fontsize': 'x-small',
+        'xtick.labelsize': 'x-small',
+        'ytick.labelsize': 'x-small'
         }
 plt.rcParams.update(plot_params)
-plt.rc('xtick', labelsize=5)
-plt.rc('ytick', labelsize=5)
+plt.rc('xtick', labelsize=12)
+plt.rc('ytick', labelsize=12)
 
 
 class SquareGrid:
