@@ -63,8 +63,8 @@ class matern32:
             raise ValueError("Metric not implemented.")
 
         res = da.multiply(
-                1 + np.sqrt(3) * dists,
-                da.exp(-np.sqrt(3) * dists))
+                1 + np.sqrt(3, dtype=np.float32) * dists,
+                da.exp(-np.sqrt(3, dtype=np.float32) * dists), dtype='float32')
         return res
 
 class squared_exponential:
