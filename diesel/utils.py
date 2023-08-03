@@ -2,11 +2,16 @@
 
 """
 import numpy as np
-from numpy.core.numeric import array, dot
 from numpy import average
 
 import dask.array as da
 from dask.distributed import wait, progress
+from dask.utils import apply, derived_from
+from dask.array.core import (Array, asanyarray, asarray, blockwise, broadcast_arrays,
+        broadcast_shapes, broadcast_to, concatenate, elemwise, from_array, implements,
+        is_scalar_for_elemwise, map_blocks, stack, tensordot_lookup)
+from dask.array.routines import array, dot
+
 
 from climate.utils import match_vectors_indices
 
@@ -184,3 +189,52 @@ def build_forward_mean_per_cell(mean_ds, data_ds):
     for i in range(unique_indices.shape[0]):
         G[i, unique_indices[i]] = 1.0
     return G, mean_datas, std_datas, median_datas, n_datas, data_lons, data_lats
+
+@derived_from(np)
+def cov(m, y=None, rowvar=1, bias=0, ddof=None):
+    """ Re-implementation of the dask.cov function. 
+    The goal is to restrict the computation to float32 
+    to save memory, apart from that, the implementation is the same. 
+
+    """
+    if ddof is not None and ddof != int(ddof):
+        raise ValueError("ddof must be integer")
+
+    # Handles complex arrays too
+    m = asarray(m)
+    if y is None:
+        dtype = np.result_type(m, np.float32)
+    else:
+        y = asarray(y)
+        dtype = np.result_type(m, y, np.float32)
+    X = array(m, ndmin=2, dtype=dtype)
+
+    if X.shape[0] == 1:
+        rowvar = 1
+    if rowvar:
+        N = X.shape[1]
+        axis = 0
+    else:
+        N = X.shape[0]
+        axis = 1
+
+    # check ddof
+    if ddof is None:
+        if bias == 0:
+            ddof = 1
+        else:
+            ddof = 0
+    fact = float(N - ddof)
+    if fact <= 0:
+        warnings.warn("Degrees of freedom <= 0 for slice", RuntimeWarning)
+        fact = 0.0
+
+    if y is not None:
+        y = array(y, ndmin=2, dtype=dtype)
+        X = concatenate((X, y), axis)
+
+    X = X - X.mean(axis=1 - axis, keepdims=True)
+    if not rowvar:
+        return (dot(X.T, X.conj()) / fact).squeeze()
+    else:
+        return (dot(X, X.T.conj()) / fact).squeeze()
