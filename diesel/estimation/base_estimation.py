@@ -1,7 +1,7 @@
 """ Basic covariance estimation procedures.
 
 """
-import dask.array as da
+from diesel.utils import cov
 
 
 def empirical_covariance(ensemble):
@@ -17,7 +17,8 @@ def empirical_covariance(ensemble):
     covariance: dask.array (lazy) [dim, dim]
 
     """
-    return da.cov(ensemble, rowvar=False)
+    # Estimate using homemade (float32) implemenation of da.cov
+    return cov(ensemble, rowvar=False)
 
 def localize_covariance(base_cov, localization_matrix):
     """ Performs covariance localization.
