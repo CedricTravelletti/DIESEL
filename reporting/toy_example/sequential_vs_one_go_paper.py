@@ -93,12 +93,14 @@ def main():
         ensembles = da.stack(ensembles)
 
         # Save for later.
+        """
         np.save(os.path.join(
             results_folder, "ground_truth_{}.npy".format(rep)), ground_truth.compute())
         np.save(os.path.join(
             results_folder, "ensemble_{}.npy".format(rep)), ensembles.compute())
         np.save(os.path.join(
             results_folder, "mean_{}.npy".format(rep)), mean.compute())
+        """
     
         # Estimate covariance using empirical covariance of the ensemble.
         raw_estimated_cov_lazy = ds.estimation.empirical_covariance(ensembles)
@@ -113,10 +115,12 @@ def main():
         loc_estimated_cov = client.persist(loc_estimated_cov)
     
         # Prepare some data by randomly selecting some points.
-        n_data = 300
+        n_data = 1000
         data_inds = np.random.choice(ground_truth.shape[0], n_data, replace=False)  
+        """
         np.save(os.path.join(
             results_folder, "data_inds_{}.npy".format(rep)), data_inds)
+        """
     
         #  Built observation operator.
         G = np.zeros((data_inds.shape[0], ground_truth.shape[0]))
@@ -140,12 +144,14 @@ def main():
                 client.persist(ensemble_updated_aao_loc))
         progress(ensemble_updated_aao_loc)
 
+        """
         np.save(os.path.join(
             results_folder, "mean_updated_aao_loc_{}.npy".format(rep)),
             mean_updated_aao_loc.compute())
         np.save(os.path.join(
             results_folder, "ensemble_updated_aao_loc_{}.npy".format(rep)),
             ensemble_updated_aao_loc.compute())
+        """
 
         # Version with the true covariance.
         mean_updated_aao_truecov, ensemble_updated_aao_truecov = my_filter.update_ensemble(
@@ -155,12 +161,14 @@ def main():
                 client.persist(ensemble_updated_aao_truecov))
         progress(ensemble_updated_aao_truecov)
 
+        """
         np.save(os.path.join(
             results_folder, "mean_updated_aao_truecov_{}.npy".format(rep)),
             mean_updated_aao_truecov.compute())
         np.save(os.path.join(
             results_folder, "ensemble_updated_aao_truecov_{}.npy".format(rep)),
             ensemble_updated_aao_truecov.compute())
+        """
         # -----------------------------
         # End all-at-once assimilation.
         # -----------------------------
@@ -171,12 +179,14 @@ def main():
         mean_updated_seq_loc, ensemble_updated_seq_loc = my_filter.update_ensemble_sequential_nondask(
                 mean, ensembles, G, y, data_std, localization_matrix)
 
+        """
         np.save(os.path.join(
                 results_folder, "mean_updated_seq_loc_{}.npy".format(rep)),
                 mean_updated_seq_loc)
         np.save(os.path.join(
                 results_folder, "ensemble_updated_seq_loc_{}.npy".format(rep)),
                 ensemble_updated_seq_loc)
+        """
 
         # Compute scores and save.
         ES, _, _ = compute_energy_score(ensembles.compute(), ground_truth.compute())
