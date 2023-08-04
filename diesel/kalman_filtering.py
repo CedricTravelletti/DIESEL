@@ -369,9 +369,10 @@ class EnsembleKalmanFilter:
 
             # Extract the concerned line of the empirical covariance.
             cov_pushfwd = cross_covariance(
-                    ensemble_updated.cpu().numpy(),
-                    ensemble_updated.cpu().numpy()[:, obs_ind], rowvar=False).reshape(-1, 1)
-            cov_pushfwd = torch.from_numpy(cov_pushfwd).to(DEVICE).float()
+                    ensemble_updated.cpu(),
+                    ensemble_updated.cpu()[:, obs_ind], rowvar=False).reshape(-1, 1)
+
+            cov_pushfwd = cov_pushfwd.to(DEVICE).float()
             loc_obs_cov = torch.from_numpy(
                     global_client.compute(localization_matrix[:, obs_ind]).result()).to(DEVICE).float()
 

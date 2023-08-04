@@ -3,6 +3,7 @@
 """
 import numpy as np
 from numpy import average
+import torch
 
 import dask.array as da
 from dask.distributed import wait, progress
@@ -122,11 +123,13 @@ def cross_covariance(X, Y, bias=False, ddof=None, dtype=None, rowvar=True):
         raise ValueError(
             "ddof must be integer")
 
+    """
     if dtype is None:
         dtype = np.result_type(X, np.float64)
 
     X = array(X, ndmin=2, dtype=dtype)
     Y = array(Y, ndmin=2, dtype=dtype)
+    """
 
     if ddof is None:
         if bias == 0:
@@ -134,9 +137,8 @@ def cross_covariance(X, Y, bias=False, ddof=None, dtype=None, rowvar=True):
         else:
             ddof = 0
 
-    w = None
-    avg_X, w_sum = average(X, axis=1, weights=w, returned=True)
-    avg_Y, w_sum = average(Y, axis=1, weights=w, returned=True)
+    avg_X = torch.mean(X, axis=1)
+    avg_Y = torch.mean(Y, axis=1)
 
     fact = X.shape[1] - ddof
 
@@ -145,7 +147,7 @@ def cross_covariance(X, Y, bias=False, ddof=None, dtype=None, rowvar=True):
     Y -= avg_Y[:, None]
     
     Y_T = Y.T
-    c = dot(X, Y_T.conj())
+    c = torch.matmul(X, Y_T.conj())
     c *= np.true_divide(1, fact)
     return c.squeeze()
 
