@@ -46,7 +46,7 @@ class EnsembleKalmanFilter:
 
         Returns
         -------
-        update_mean: dask.array (m, 1) (lazy)
+        update_mean: dask.array (m) (lazy)
 
         """
         y = y.reshape(-1, 1)
@@ -55,7 +55,7 @@ class EnsembleKalmanFilter:
         kalman_gain = matmul(cov_pushfwd, inv)
         prior_misfit = y - matmul(G, mean)
         mean_updated = mean + matmul(kalman_gain, prior_misfit)
-        return mean_updated
+        return mean_updated.reshape(-1)
 
     def update_mean(self, mean, G, y, data_std, cov):
         """ Update the mean over a single period (step).
@@ -76,7 +76,7 @@ class EnsembleKalmanFilter:
 
         Returns
         -------
-        update_mean: dask.array (m, 1) (lazy)
+        update_mean: dask.array (m) (lazy)
 
         """
         cov_pushfwd = matmul(cov, transpose(G))
@@ -198,7 +198,7 @@ class EnsembleKalmanFilter:
 
         Returns
         -------
-        update_mean: dask.array (m, 1) (lazy)
+        update_mean: dask.array (m) (lazy)
         update_members: dask.array (n_members, m) (lazy)
 
         """
