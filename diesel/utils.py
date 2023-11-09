@@ -117,8 +117,11 @@ def svd_invert(A, svd_rank=None, client=global_client):
 
 def cross_covariance(X, Y, bias=False, ddof=None, dtype=None, rowvar=True):
     if not rowvar:
-        X = X.T
-        Y = Y.T
+        X_in = X.T
+        Y_in = Y.T
+    else:
+        X_in = X
+        Y_in = Y
     if ddof is not None and ddof != int(ddof):
         raise ValueError(
             "ddof must be integer")
@@ -137,17 +140,17 @@ def cross_covariance(X, Y, bias=False, ddof=None, dtype=None, rowvar=True):
         else:
             ddof = 0
 
-    avg_X = torch.mean(X, axis=1)
-    avg_Y = torch.mean(Y, axis=1)
+    avg_X = torch.mean(X_in, axis=1)
+    avg_Y = torch.mean(Y_in, axis=1)
 
-    fact = X.shape[1] - ddof
+    fact = X_in.shape[1] - ddof
 
     # Subtract the mean.
-    X -= avg_X[:, None]
-    Y -= avg_Y[:, None]
+    X_centred = X_in - avg_X[:, None]
+    Y_centred = Y_in - avg_Y[:, None]
     
-    Y_T = Y.T
-    c = torch.matmul(X, Y_T.conj())
+    Y_T = Y_centred.T
+    c = torch.matmul(X_centred, Y_T.conj())
     c *= np.true_divide(1, fact)
     return c.squeeze()
 
