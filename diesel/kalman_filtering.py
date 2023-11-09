@@ -395,8 +395,7 @@ class EnsembleKalmanFilter:
             mean_updated = mean_updated + torch.matmul(kalman_gain, prior_misfit)
             # Add the mean to get ensemble from anomalies.
             ensemble_updated = mean_updated.reshape(-1)[None, :] + anomalies_updated
-
-        return mean_updated.detach().cpu().numpy(), ensemble_updated.detach().cpu().numpy()
+        return mean_updated.detach().cpu().numpy().reshape(-1), ensemble_updated.detach().cpu().numpy()
 
     def update_ensemble_sequential(self, mean, ensemble, G, y, data_std, cov, covariance_estimator=None):
         """ Update an ensemble over a single period (step) by assimilating the 
