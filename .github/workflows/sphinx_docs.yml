@@ -19,4 +19,4 @@ jobs:
       with:
         documentation_path: ./docs/source
         requirements_path: ./docs/requirements.txt
-        publish: false
+        publish: true
