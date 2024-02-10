@@ -2,7 +2,8 @@
 
 """
 import numpy as np
-from numpy import average
+from sklearn.neighbors import BallTree
+
 import torch
 
 import dask.array as da
@@ -243,3 +244,45 @@ def cov(m, y=None, rowvar=1, bias=0, ddof=None):
         return (dot(X.T, X.conj()) / fact).squeeze()
     else:
         return (dot(X, X.T.conj()) / fact).squeeze()
+
+def match_vectors_indices(base_vector, vector_to_match):
+    """" Given two stacked datasets (vectors), for each element in the dataset_tomatch,
+    find the index of the element in the base dataset that is closest.
+
+    Note that the base dataset should contain only one element at each spatial locaiton, 
+    so that the matched index is unique.
+
+    Parameters
+    ----------
+    base_vector: xarray.DataArray
+        Stacked dataset.
+    vector_to_match: xarray.DataArray
+        Stacked dataset.
+
+    Returns
+    -------
+    Array[int] (vector_to_match.shape[0])
+        Indices in the base dataset of closest element for each 
+        element of the dataset_tomatch.
+
+    """
+    # Convert to radians.
+    lat_rad = np.deg2rad(base_vector.latitude.values.astype(np.float32))
+    lon_rad = np.deg2rad(base_vector.longitude.values.astype(np.float32))
+
+    # Build a ball tree to make nearest neighbor queries faster.
+    ball = BallTree(np.vstack([lat_rad, lon_rad]).T, metric='haversine')
+
+    # Define grid to be matched.
+    lon_tomatch = np.deg2rad(vector_to_match.longitude.values.astype(np.float32))
+    lat_tomatch = np.deg2rad(vector_to_match.latitude.values.astype(np.float32))
+    coarse_grid_list = np.vstack([lat_tomatch.T, lon_tomatch.T]).T
+
+    distances, index_array_1d = ball.query(coarse_grid_list, k=1)
+    
+    # Convert back to kilometers.
+    distances_km = 6371 * distances
+    # Sanity check.
+    print("Maximal distance to matched point: {} km.".format(np.max(distances_km)))
+
+    return index_array_1d.squeeze()
