@@ -12,7 +12,6 @@ from diesel.utils import cholesky_invert, svd_invert, cross_covariance
 
 import time
 
-from builtins import CLIENT as global_client
 
 # Use torch for the sequential updating (which is done entirely on the scheduler.
 import torch
@@ -114,6 +113,9 @@ class EnsembleKalmanFilter:
             the updated mean to obtain updated ensemble members.
 
         """
+        # Import running client.
+        from builtins import CLIENT as global_client
+        
         # Work with anomalies.
         anomalies = ensemble - mean.reshape(-1)[None, :]
 
@@ -202,6 +204,9 @@ class EnsembleKalmanFilter:
         update_members: dask.array (n_members, m) (lazy)
 
         """
+        # Import running client.
+        from builtins import CLIENT as global_client
+        
         cov_pushfwd = matmul(cov, transpose(G))
         data_cov = data_std**2 * eye(y.shape[0])
         to_invert = matmul(G, cov_pushfwd) + data_cov
@@ -242,6 +247,9 @@ class EnsembleKalmanFilter:
         update_mean: dask.array (m, 1) (lazy)
 
         """
+        # Import running client.
+        from builtins import CLIENT as global_client
+
         mean_updated = mean
 
         # Loop over the data points and ingest sequentially.
@@ -280,6 +288,9 @@ class EnsembleKalmanFilter:
         update_mean: dask.array (m, 1) (lazy)
 
         """
+        # Import running client.
+        from builtins import CLIENT as global_client
+
         mean_updated = global_client.compute(mean).result().reshape(-1, 1)
         # Compute pushforward once and for all. extract lines later.
         cov_pushfwd_full = global_client.persist(cov @ transpose(G))
@@ -343,6 +354,9 @@ class EnsembleKalmanFilter:
         update_mean: dask.array (m, 1) (lazy)
 
         """
+        # Import running client.
+        from builtins import CLIENT as global_client
+
         mean_updated = global_client.compute(mean).result().reshape(-1, 1)
         ensemble_updated = global_client.compute(ensemble).result()
 
@@ -427,6 +441,9 @@ class EnsembleKalmanFilter:
         update_members: dask.array (n_members, m) (lazy)
 
         """
+        # Import running client.
+        from builtins import CLIENT as global_client
+
         mean_updated, ensemble_updated = mean, ensemble
 
         # Loop over the data points and ingest sequentially.

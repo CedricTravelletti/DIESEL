@@ -1,0 +1,48 @@
+[project]
+name = "DIESEL"
+version = "0.4.0"
+description = "DIstributed EStimation of large EsembLe covariance matrices."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dask>=2025.1.0",
+    "dask-jobqueue>=0.9.0",
+    "distributed>=2025.1.0",
+    "matplotlib>=3.10.0",
+    "numpy>=2.2.2",
+    "pyqt6>=6.8.0",
+    "scikit-learn>=1.6.1",
+    "seaborn>=0.13.2",
+    "torch>=2.5.1",
+]
+authors = [{ name = "Cédric Travelletti", email = "cedrictravelletti@gmail.com"}]
+classifiers = [
+  # How mature is this project? Common values are
+  #   3 - Alpha
+  #   4 - Beta
+  #   5 - Production/Stable
+  "Development Status :: 3 - Alpha",
+
+  # Indicate who your project is intended for
+  "Intended Audience :: Developers",
+  "Topic :: Bayesian Statistics :: Very Large Data Assimilation",
+
+  # Pick your license as you wish
+  "License :: OSI Approved :: MIT License",
+
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3 :: Only",
+]
+[project.urls]
+Homepage = "https://github.com/CedricTravelletti/DIESEL"
+Documentation = "https://readthedocs.org"
+Repository = "https://github.com/me/spam.git"
+
+[build-system]
+requires = [
+    "setuptools",
+    "Cython",
+    "numpy",
+]
+build-backend = "setuptools.build_meta"

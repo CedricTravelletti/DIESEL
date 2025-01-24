@@ -15,12 +15,6 @@ from dask.array.core import (Array, asanyarray, asarray, blockwise, broadcast_ar
 from dask.array.routines import array, dot
 
 
-from climate.utils import match_vectors_indices
-
-
-# Get the client stored in the global variable.
-from builtins import CLIENT as global_client
-
 
 CHUNK_REDUCTION_FACTOR = 4
 
@@ -97,7 +91,11 @@ def cholesky_invert(A, debug_string):
         R_inv = R_inv[:-shape_diff, :-shape_diff]
     return da.transpose(R), da.matmul(R_inv, da.transpose(R_inv))
 
-def svd_invert(A, svd_rank=None, client=global_client):
+def svd_invert(A, svd_rank=None, client=None):
+    if client is None:
+        # Get the client stored in the global variable.
+        from builtins import CLIENT as client
+    
     if svd_rank is None: svd_rank = A.shape[0]
     # Compute compressed SVD.
     # WARNING: dask return the already transposed version of v, 

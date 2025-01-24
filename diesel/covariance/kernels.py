@@ -4,17 +4,16 @@
 import numpy as np
 import dask
 import dask.array as da
-import dask_distance
-import dask_distance._utils as utils
+from diesel.dask_distance import euclidean, cdist, seuclidean, _broadcast_uv_wrapper
 from haversine import haversine
 
 
-# @utils._broadcast_uv_wrapper
+# @_broadcast_uv_wrapper
 def pairwise_euclidean(coords1, coords2):
-    return dask_distance.euclidean(coords1, coords2)
+    return euclidean(coords1, coords2)
 
 def pairwise_haversine(coords1, coords2):
-    return dask_distance.cdist(coords1, coords2, lambda x, y: haversine(x[0], x[1], y[0], y[1]))
+    return cdist(coords1, coords2, lambda x, y: haversine(x[0], x[1], y[0], y[1]))
 
 class matern32:
     """ Matern 3/2 covariance kernel.
@@ -31,7 +30,7 @@ class matern32:
         """
         self.lengthscales = lengthscales
 
-    def covariance_matrix(self, coords1, coords2, lengthscales=None, metric='euclidean'):
+    def covariance_matrix(self, coords1, coords2=None, lengthscales=None, metric='euclidean'):
         """ Compute covariance matrix between two sets of points.
 
         Parameters
@@ -40,7 +39,7 @@ class matern32:
             Point coordinates.
         coords2: (n, n_dims) dask.array or Future
             Point coordinates.
-        lengthscales_2: array-like (n_dims), defaults to None.
+        lengthscales: array-like (n_dims), defaults to None.
             Can be used to override using the lengthscales of the kernel and use 
             different ones.
             Note that for haversine metric one should provide only one lengthscale.
@@ -52,11 +51,14 @@ class matern32:
             Pairwise covariance matrix.
     
         """
+        if coords2 is None:
+            coords2 = coords1
+
         if lengthscales is None:
             lengthscales = self.lengthscales
 
         if metric == 'euclidean':
-            dists = dask_distance.seuclidean(coords1, coords2, lengthscales**2)
+            dists = seuclidean(coords1, coords2, lengthscales**2)
         elif metric == 'haversine':
             dists = (1 / lengthscales) * pairwise_haversine(coords1, coords2)
         else:
@@ -91,7 +93,7 @@ class squared_exponential:
             Point coordinates.
         coords2: (n, n_dims) dask.array or Future
             Point coordinates.
-        lengthscales_2: array-like (n_dims), defaults to None.
+        lengthscales: array-like (n_dims), defaults to None.
             Can be used to override using the lengthscales of the kernel and use 
             different ones.
     
@@ -105,7 +107,7 @@ class squared_exponential:
             lengthscales = self.lengthscales
 
         if metric == 'euclidean':
-            dists = dask_distance.seuclidean(coords1, coords2, lengthscales**2)
+            dists = seuclidean(coords1, coords2, lengthscales**2)
         elif metric == 'haversine':
             dists = (1 / lengthscales) * pairwise_haversine(coords1, coords2)
         else:

@@ -8,3 +8,6 @@ dask
 dask-distance
 netCDF4
 cartopy
+dask
+dask_jobqueue
+seaborn
