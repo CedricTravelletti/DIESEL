@@ -4,7 +4,6 @@
 import numpy as np
 import dask.array as da
 import matplotlib.pyplot as plt
-import matplotlib.font_manager
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import seaborn as sns
 

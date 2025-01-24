@@ -7,6 +7,7 @@ from diesel.gridding import SquareGrid
 from diesel.cluster import LocalCluster
 from diesel.covariance import matern32
 from diesel.sampling import SvdSampler
+import matplotlib.pyplot as plt
 
 
 cluster = LocalCluster()
@@ -33,7 +34,6 @@ ensembles = sampler.sample(16)
 ensembles = client.compute(ensembles).result()
 
 # Plot results
-import matplotlib.pyplot as plt
 fig, axs = plt.subplots(4, 4)
 
 for i, sample in enumerate(ensembles):

@@ -1,14 +1,13 @@
-""" Define the various types of computing clusters that can 
+"""Define the various types of computing clusters that can
 be used to run the computation.
 
 """
-from dask.distributed import LocalCluster
+
 from dask_jobqueue import SLURMCluster
 
 
-def UbelixCluster(n_nodes, mem_per_node=16, cores_per_node=1, 
-        partition="epyc2", qos="job_epyc2"):
-    """ Provision a Daks cluster on the Ubelix cluster of UniBern.
+def UbelixCluster(n_nodes, mem_per_node=16, cores_per_node=1, partition="epyc2", qos="job_epyc2"):
+    """Provision a Daks cluster on the Ubelix cluster of UniBern.
 
     Parameters
     ----------
@@ -32,9 +31,9 @@ def UbelixCluster(n_nodes, mem_per_node=16, cores_per_node=1,
         memory=mem_per_node,
         death_timeout=6000,
         walltime="06:00:00",
-        job_extra=['--qos="{}"'.format(qos), '--partition="{}"'.format(partition)]
+        job_extra=['--qos="{}"'.format(qos), '--partition="{}"'.format(partition)],
     )
 
     # Manually define the size of the cluster.
     cluster.scale(n_nodes)
-    return(cluster)
+    return cluster

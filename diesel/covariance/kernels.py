@@ -2,9 +2,8 @@
 
 """
 import numpy as np
-import dask
 import dask.array as da
-from diesel.dask_distance import euclidean, cdist, seuclidean, _broadcast_uv_wrapper
+from diesel.dask_distance import euclidean, cdist, seuclidean
 from haversine import haversine
 
 

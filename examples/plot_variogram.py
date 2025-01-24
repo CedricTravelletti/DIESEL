@@ -1,9 +1,6 @@
 """ Plot variogram.
 
 """
-import numpy as np
-import pandas as pd
-import dask.array as da
 from dask.distributed import Client
 
 import diesel as ds
@@ -12,6 +9,8 @@ import diesel as ds
 def main():
     cluster = ds.LocalCluster()
     client = Client(cluster)
+     # Add to builtins so we have one global client.
+    __builtins__.CLIENT = client
     
     # Build a square grid with 30^2 elements.
     grid = ds.gridding.SquareGrid(30)

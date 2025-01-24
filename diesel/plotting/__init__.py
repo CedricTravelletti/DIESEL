@@ -1,2 +1,3 @@
-from .covariance_plotting import compute_variogram
-from .covariance_plotting import plot_variogram
+from .covariance_plotting import compute_variogram, plot_variogram
+
+__all__ = ["compute_variogram", "plot_variogram"]

@@ -1,2 +1,3 @@
-from .samplers import SvdSampler
-from .samplers import CholeskySampler
+from .samplers import SvdSampler, CholeskySampler
+
+__all__ = ["SvdSampler", "CholeskySampler"]

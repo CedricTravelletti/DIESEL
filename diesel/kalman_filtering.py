@@ -1,13 +1,12 @@
-""" Module implementing (ensemble) Kalman filtering. 
+"""Module implementing (ensemble) Kalman filtering.
 
 In DIESEL, an ensemble is a dask array of shape (n_members, dim).
 
 """
-import numpy as np
+
 import dask.array as da
 from dask.array import matmul, eye, transpose
 from dask.distributed import wait
-import diesel as ds
 from diesel.utils import cholesky_invert, svd_invert, cross_covariance
 
 import time
@@ -15,10 +14,11 @@ import time
 
 # Use torch for the sequential updating (which is done entirely on the scheduler.
 import torch
+
 torch.set_num_threads(8)
 
 # Select gpu if available and fallback to cpu else.
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class EnsembleKalmanFilter:
@@ -26,8 +26,8 @@ class EnsembleKalmanFilter:
         pass
 
     def _update_mean(self, mean, G, y, cov_pushfwd, inv):
-        """ Helper function for updating the mean over a single period.
-        This function assumes that the compute intensive intermediate matrices 
+        """Helper function for updating the mean over a single period.
+        This function assumes that the compute intensive intermediate matrices
         have already been computed.
 
         Parameters
@@ -57,7 +57,7 @@ class EnsembleKalmanFilter:
         return mean_updated.reshape(-1)
 
     def update_mean(self, mean, G, y, data_std, cov):
-        """ Update the mean over a single period (step).
+        """Update the mean over a single period (step).
 
         Parameters
         ----------
@@ -70,7 +70,7 @@ class EnsembleKalmanFilter:
         data_std: float
             Standard deviation of observational noise.
         cov: dask.array (m, m)
-            Covariance matrix (estimated) between the grid points. 
+            Covariance matrix (estimated) between the grid points.
             Can be lazy.
 
         Returns
@@ -85,10 +85,9 @@ class EnsembleKalmanFilter:
         _, inv = cholesky_invert(to_invert)
         return self._update_mean(mean, G, y, cov_pushfwd, inv)
 
-    def _update_anomalies(self, mean, ensemble, G, data_std, cov_pushfwd, sqrt,
-            svd_rank=1000):
-        """ Helper function for updating the ensemble members over a single period (step).
-        This function assumes that the compute intensive intermediate matrices 
+    def _update_anomalies(self, mean, ensemble, G, data_std, cov_pushfwd, sqrt, svd_rank=1000):
+        """Helper function for updating the ensemble members over a single period (step).
+        This function assumes that the compute intensive intermediate matrices
         have already been computed.
 
         Parameters
@@ -109,13 +108,13 @@ class EnsembleKalmanFilter:
         Returns
         -------
         anomalies_updated: dask.array (n_members, m) (lazy)
-            Updated anomalies (deviations from mean). Have to add 
+            Updated anomalies (deviations from mean). Have to add
             the updated mean to obtain updated ensemble members.
 
         """
         # Import running client.
         from builtins import CLIENT as global_client
-        
+
         # Work with anomalies.
         anomalies = ensemble - mean.reshape(-1)[None, :]
 
@@ -124,20 +123,20 @@ class EnsembleKalmanFilter:
 
         # TODO: Just trying to see where it goes wrong.
         # Inverese of the other matrix involved.
-        _, inv_2 = svd_invert(sqrt + data_std * eye(G.shape[0]),
-                svd_rank=svd_rank, client=global_client)
-        kalman_gain_tilde = matmul(cov_pushfwd,
-                matmul(inv_sqrt.T, inv_2))
+        _, inv_2 = svd_invert(
+            sqrt + data_std * eye(G.shape[0]), svd_rank=svd_rank, client=global_client
+        )
+        kalman_gain_tilde = matmul(cov_pushfwd, matmul(inv_sqrt.T, inv_2))
 
         # Compute predictions for each member using batched matrix multiplication.
-        base_pred = matmul(G, anomalies[:, :, None]) # Resulting shape (n_members, m, 1)
+        base_pred = matmul(G, anomalies[:, :, None])  # Resulting shape (n_members, m, 1)
         anomalies_updated = anomalies[:, :, None] - matmul(kalman_gain_tilde, base_pred)
 
         # We remove the last dimension before returning.
         return anomalies_updated.squeeze(-1)
 
     def _update_anomalies_single_nondask(self, mean, ensemble, G, data_std, cov_pushfwd, sqrt):
-        """ Helper function for updating the ensemble members during non-dask sequential 
+        """Helper function for updating the ensemble members during non-dask sequential
         updtating. only processes a single data point.
 
         Parameters
@@ -158,7 +157,7 @@ class EnsembleKalmanFilter:
         Returns
         -------
         anomalies_updated: dask.array (n_members, m) (lazy)
-            Updated anomalies (deviations from mean). Have to add 
+            Updated anomalies (deviations from mean). Have to add
             the updated mean to obtain updated ensemble members.
 
         """
@@ -172,15 +171,14 @@ class EnsembleKalmanFilter:
         kalman_gain_tilde = (inv_sqrt * inv_2) * cov_pushfwd
 
         # Compute predictions for each member using batched matrix multiplication.
-        base_pred = torch.matmul(G, anomalies[:, :, None]) # Resulting shape (n_members, m, 1)
+        base_pred = torch.matmul(G, anomalies[:, :, None])  # Resulting shape (n_members, m, 1)
         anomalies_updated = anomalies[:, :, None] - torch.matmul(kalman_gain_tilde, base_pred)
 
         # We remove the last dimension before returning.
         return anomalies_updated.squeeze(-1)
 
-    def update_ensemble(self, mean, ensemble, G, y, data_std, cov,
-            svd_rank=1000):
-        """ Update an ensemble over a single period (step).
+    def update_ensemble(self, mean, ensemble, G, y, data_std, cov, svd_rank=1000):
+        """Update an ensemble over a single period (step).
 
         Parameters
         ----------
@@ -195,7 +193,7 @@ class EnsembleKalmanFilter:
         data_std: float
             Standard deviation of observational noise.
         cov: dask.array (m, m)
-            Covariance matrix (estimated) between the grid points. 
+            Covariance matrix (estimated) between the grid points.
             Can be lazy.
 
         Returns
@@ -206,26 +204,25 @@ class EnsembleKalmanFilter:
         """
         # Import running client.
         from builtins import CLIENT as global_client
-        
+
         cov_pushfwd = matmul(cov, transpose(G))
         data_cov = data_std**2 * eye(y.shape[0])
         to_invert = matmul(G, cov_pushfwd) + data_cov
 
-        sqrt, inv = svd_invert(to_invert,
-                svd_rank=svd_rank, client=global_client)
+        sqrt, inv = svd_invert(to_invert, svd_rank=svd_rank, client=global_client)
 
         anomalies_updated = self._update_anomalies(
-                mean, ensemble, G, data_std, cov_pushfwd, sqrt,
-                svd_rank=svd_rank)
+            mean, ensemble, G, data_std, cov_pushfwd, sqrt, svd_rank=svd_rank
+        )
         mean_updated = self._update_mean(mean, G, y, cov_pushfwd, inv)
 
         # Add the mean to get ensemble from anomalies.
         ensemble_updated = mean_updated.reshape(-1)[None, :] + anomalies_updated
 
-        return mean_updated.astype('float32'), ensemble_updated.astype('float32')
+        return mean_updated.astype("float32"), ensemble_updated.astype("float32")
 
     def update_mean_sequential(self, mean, G, y, data_std, cov):
-        """ Update the mean over a single period (step) by assimilating the 
+        """Update the mean over a single period (step) by assimilating the
         data sequentially (one data point at a time).
 
         Parameters
@@ -239,7 +236,7 @@ class EnsembleKalmanFilter:
         data_std: float
             Standard deviation of observational noise.
         cov: dask.array (m, m)
-            Covariance matrix (estimated) between the grid points. 
+            Covariance matrix (estimated) between the grid points.
             Can be lazy.
 
         Returns
@@ -258,7 +255,7 @@ class EnsembleKalmanFilter:
             G_seq = G[i, :].reshape(1, -1)
             y_seq = y[i].reshape(1, -1)
 
-            mean_updated = self.update_mean(mean, G, y, data_std, cov)   
+            mean_updated = self.update_mean(mean_updated, G_seq, y_seq, data_std, cov)
 
             # Have to execute once in a while, otherwise graph gets too big.
             if i % 100 == 0:
@@ -266,7 +263,7 @@ class EnsembleKalmanFilter:
         return mean_updated
 
     def update_mean_sequential_nondask(self, mean, G, y, data_std, cov):
-        """ Update the mean over a single period (step) by assimilating the 
+        """Update the mean over a single period (step) by assimilating the
         data sequentially (one data point at a time).
 
         Parameters
@@ -280,7 +277,7 @@ class EnsembleKalmanFilter:
         data_std: float
             Standard deviation of observational noise.
         cov: dask.array (m, m)
-            Covariance matrix (estimated) between the grid points. 
+            Covariance matrix (estimated) between the grid points.
             Can be lazy.
 
         Returns
@@ -307,11 +304,11 @@ class EnsembleKalmanFilter:
 
         # Loop over the data points and ingest sequentially.
         for i in range(G.shape[0]):
-            # Every 500 observations, repatriate a chunk of the pushforward 
+            # Every 500 observations, repatriate a chunk of the pushforward
             # and send it to the GPU.
             if i % 500 == 0:
-                i_pushfwd_start = i # The index at which the local pushfwd starts.
-                local_pushfwd = global_client.compute(cov_pushfwd_full[:,i:i+500]).result()
+                i_pushfwd_start = i  # The index at which the local pushfwd starts.
+                local_pushfwd = global_client.compute(cov_pushfwd_full[:, i : i + 500]).result()
                 local_pushfwd = torch.from_numpy(local_pushfwd).to(DEVICE).float()
 
             # One data points.
@@ -321,7 +318,7 @@ class EnsembleKalmanFilter:
             # Now are fully in numpy.
             cov_pushfwd = local_pushfwd[:, i - i_pushfwd_start].reshape(-1, 1)
 
-            data_cov = data_std**2 
+            data_cov = data_std**2
             to_invert = torch.matmul(G_seq, cov_pushfwd) + data_cov
             inv = 1 / to_invert[0, 0]
 
@@ -331,8 +328,10 @@ class EnsembleKalmanFilter:
 
         return mean_updated.detach().cpu().numpy()
 
-    def update_ensemble_sequential_nondask(self, mean, ensemble, G, y, data_std, localization_matrix):
-        """ Update the mean over a single period (step) by assimilating the 
+    def update_ensemble_sequential_nondask(
+        self, mean, ensemble, G, y, data_std, localization_matrix
+    ):
+        """Update the mean over a single period (step) by assimilating the
         data sequentially (one data point at a time).
 
         Parameters
@@ -346,7 +345,7 @@ class EnsembleKalmanFilter:
         data_std: float
             Standard deviation of observational noise.
         localization_matrix: dask.array (m, m)
-            Matrix used to perform localization. Will get Hadamard-producted with 
+            Matrix used to perform localization. Will get Hadamard-producted with
             the empirical covariance at every assimilation stage.
 
         Returns
@@ -376,26 +375,26 @@ class EnsembleKalmanFilter:
             G_seq = G_loc[i, :].reshape(1, -1)
             y_seq = y_loc[i].reshape(1, 1)
 
-            # Find the indices at which G_seq is non zero and extract those 
+            # Find the indices at which G_seq is non zero and extract those
             # parts of the covariance.
             _, obs_ind = G_seq.nonzero(as_tuple=True)
             obs_ind = obs_ind.cpu().numpy()
 
             # Extract the concerned line of the empirical covariance.
             cov_pushfwd = cross_covariance(
-                    ensemble_updated.cpu(),
-                    ensemble_updated.cpu()[:, obs_ind], rowvar=False).reshape(-1, 1)
+                ensemble_updated.cpu(), ensemble_updated.cpu()[:, obs_ind], rowvar=False
+            ).reshape(-1, 1)
 
             cov_pushfwd = cov_pushfwd.to(DEVICE).float()
-            loc_obs_cov = torch.from_numpy(
-                    global_client.compute(localization_matrix[:, obs_ind]).result()).to(DEVICE).float()
+            loc_obs_cov = (
+                torch.from_numpy(global_client.compute(localization_matrix[:, obs_ind]).result())
+                .to(DEVICE)
+                .float()
+            )
 
-            cov_pushfwd = torch.mul(
-                    cov_pushfwd,
-                    loc_obs_cov
-                    )
+            cov_pushfwd = torch.mul(cov_pushfwd, loc_obs_cov)
 
-            data_cov = data_std**2 
+            data_cov = data_std**2
             to_invert = torch.matmul(G_seq, cov_pushfwd) + data_cov
             inv = 1 / to_invert[0]
             sqrt = torch.sqrt(to_invert[0])
@@ -404,15 +403,20 @@ class EnsembleKalmanFilter:
             prior_misfit = y_seq - torch.matmul(G_seq, mean_updated)
 
             anomalies_updated = self._update_anomalies_single_nondask(
-                    mean_updated, ensemble_updated, G_seq, data_std, cov_pushfwd, sqrt)
+                mean_updated, ensemble_updated, G_seq, data_std, cov_pushfwd, sqrt
+            )
             # Warning, have to update mean after ensemble, since ensemble use the prior mean in the update.
             mean_updated = mean_updated + torch.matmul(kalman_gain, prior_misfit)
             # Add the mean to get ensemble from anomalies.
             ensemble_updated = mean_updated.reshape(-1)[None, :] + anomalies_updated
-        return mean_updated.detach().cpu().numpy().reshape(-1), ensemble_updated.detach().cpu().numpy()
+        return mean_updated.detach().cpu().numpy().reshape(
+            -1
+        ), ensemble_updated.detach().cpu().numpy()
 
-    def update_ensemble_sequential(self, mean, ensemble, G, y, data_std, cov, covariance_estimator=None):
-        """ Update an ensemble over a single period (step) by assimilating the 
+    def update_ensemble_sequential(
+        self, mean, ensemble, G, y, data_std, cov, covariance_estimator=None
+    ):
+        """Update an ensemble over a single period (step) by assimilating the
         data sequentially (one data point at a time).
 
         Parameters
@@ -428,11 +432,11 @@ class EnsembleKalmanFilter:
         data_std: float
             Standard deviation of observational noise.
         cov: dask.array (m, m)
-            Covariance matrix (estimated) between the grid points. 
+            Covariance matrix (estimated) between the grid points.
             Can be lazy.
         covariance_estimator: function, defaults to None
-            If provided, then at each step the covariance is estimated from 
-            the updated ensemble members using the given function. 
+            If provided, then at each step the covariance is estimated from
+            the updated ensemble members using the given function.
             Signature should be ensemble -> covariance matrix.
 
         Returns
@@ -456,12 +460,12 @@ class EnsembleKalmanFilter:
             # Re-estimate the covariance if estimator provided.
             if covariance_estimator is not None:
                 cov_est = covariance_estimator(ensemble_updated)
-            else: cov_est = cov
+            else:
+                cov_est = cov
 
             mean_updated, ensemble_updated = self.update_ensemble(
-                    mean_updated, ensemble_updated,
-                    G_seq, y_seq,
-                    data_std, cov_est)   
+                mean_updated, ensemble_updated, G_seq, y_seq, data_std, cov_est
+            )
 
             # Have to execute once in a while, otherwise graph gets too big.
             if i % 10 == 0:
@@ -474,7 +478,7 @@ class EnsembleKalmanFilter:
                 ensemble_updated = global_client.persist(ensemble_updated)
                 wait(ensemble_updated)
 
-                # Repatriate locally, so we can cancel running tasks 
+                # Repatriate locally, so we can cancel running tasks
                 # to free the scheduler.
                 # TODO: this is not clean and should be solved.
                 mean_tmp = mean_updated.compute()

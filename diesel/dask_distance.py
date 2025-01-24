@@ -1,9 +1,9 @@
-""" Utilities to compute pairwise distances in Dask. 
-        Copied from https://github.com/jakirkham/dask-distance
+"""Utilities to compute pairwise distances in Dask.
+Copied from https://github.com/jakirkham/dask-distance
 
 """
+
 import functools
-import itertools
 
 import numpy
 
@@ -114,6 +114,7 @@ def _cdist_apply(U, V, metric):
 
     return result
 
+
 def euclidean(u, v):
     """
     Finds the Euclidean distance between two 1-D arrays.
@@ -136,6 +137,7 @@ def euclidean(u, v):
     result = (abs(u - v) ** 2).sum(axis=-1) ** 0.5
 
     return result
+
 
 def seuclidean(u, v, V):
     """
@@ -176,6 +178,7 @@ def seuclidean(u, v, V):
 
     return result
 
+
 def cdist(XA, XB, metric="euclidean", **kwargs):
     """
     Finds the distance matrix using the metric on each pair of points.
@@ -199,27 +202,12 @@ def cdist(XA, XB, metric="euclidean", **kwargs):
     """
 
     func_mappings = {
-        "braycurtis": braycurtis,
-        "canberra": canberra,
-        "chebyshev": chebyshev,
-        "cityblock": cityblock,
-        "correlation": correlation,
-        "cosine": cosine,
-        "dice": dice,
         "euclidean": euclidean,
-        "hamming": hamming,
-        "jaccard": jaccard,
-        "kulsinski": kulsinski,
         "mahalanobis": mahalanobis,
         "minkowski": minkowski,
-        "rogerstanimoto": rogerstanimoto,
-        "russellrao": russellrao,
-        "sokalmichener": sokalmichener,
-        "sokalsneath": sokalsneath,
         "seuclidean": seuclidean,
         "sqeuclidean": sqeuclidean,
         "wminkowski": wminkowski,
-        "yule": yule,
     }
 
     result = None
@@ -236,12 +224,15 @@ def cdist(XA, XB, metric="euclidean", **kwargs):
         XB_bc = XB_bc.rechunk(XB_bc.chunks[:-1] + ((XB_bc.shape[-1],),))
 
         result = dask.array.atop(
-            _cdist_apply, "ij",
-            XA_bc, "ijk",
-            XB_bc, "ijk",
+            _cdist_apply,
+            "ij",
+            XA_bc,
+            "ijk",
+            XB_bc,
+            "ijk",
             dtype=float,
             concatenate=True,
-            metric=metric
+            metric=metric,
         )
     else:
         try:
@@ -253,21 +244,151 @@ def cdist(XA, XB, metric="euclidean", **kwargs):
 
         if metric == mahalanobis:
             if "VI" not in kwargs:
-                kwargs["VI"] = (
-                    dask.array.linalg.inv(
-                        dask.array.cov(dask.array.vstack([XA, XB]).T)
-                    ).T
-                )
+                kwargs["VI"] = dask.array.linalg.inv(
+                    dask.array.cov(dask.array.vstack([XA, XB]).T)
+                ).T
         elif metric == minkowski:
             kwargs.setdefault("p", 2)
         elif metric == seuclidean:
             if "V" not in kwargs:
-                kwargs["V"] = (
-                    dask.array.var(dask.array.vstack([XA, XB]), axis=0, ddof=1)
-                )
+                kwargs["V"] = dask.array.var(dask.array.vstack([XA, XB]), axis=0, ddof=1)
         elif metric == wminkowski:
             kwargs.setdefault("p", 2)
 
         result = metric(XA, XB, **kwargs)
+
+    return result
+
+
+def wminkowski(u, v, p, w):
+    """
+    Finds the weighted Minkowski distance between two 1-D arrays.
+
+    .. math::
+
+       \left(
+               \sum_{i} \lvert w_{i} \cdot (u_{i} - v_{i}) \\rvert^{p}
+        \\right)^{
+            \\frac{1}{p}
+        }
+
+    Args:
+        u:           1-D array or collection of 1-D arrays
+        v:           1-D array or collection of 1-D arrays
+        p:           degree of the norm to use
+        w:           1-D array of weights
+
+    Returns:
+        float:       Minkowski distance
+    """
+
+    p = _asarray(p)
+    w = _asarray(w)
+
+    if w.ndim != 1:
+        raise ValueError("w must have a dimension of 1.")
+
+    U, V = _broadcast_uv(u, v)
+    W = w[None, None].repeat(U.shape[0], axis=0).repeat(U.shape[1], axis=1)
+
+    U = U.astype(float)
+    V = V.astype(float)
+    p = p.astype(float)
+    W = W.astype(float)
+
+    result = (abs(W * (U - V)) ** p).sum(axis=-1) ** (1 / p)
+
+    result = _unbroadcast_uv(u, v, result)
+
+    return result
+
+
+def minkowski(u, v, p):
+    """
+    Finds the Minkowski distance between two 1-D arrays.
+
+    .. math::
+
+       \left( \sum_{i} \lvert u_{i} - v_{i} \\rvert^{p} \\right)^{\\frac{1}{p}}
+
+    Args:
+        u:           1-D array or collection of 1-D arrays
+        v:           1-D array or collection of 1-D arrays
+        p:           degree of the norm to use
+
+    Returns:
+        float:       Minkowski distance
+    """
+
+    U, V = _broadcast_uv(u, v)
+    p = _asarray(p)
+
+    U = U.astype(float)
+    V = V.astype(float)
+    p = p.astype(float)
+
+    result = (abs(U - V) ** p).sum(axis=-1) ** (1 / p)
+
+    result = _unbroadcast_uv(u, v, result)
+
+    return result
+
+
+def mahalanobis(u, v, VI):
+    """
+    Finds the Mahalanobis distance between two 1-D arrays.
+
+    .. math::
+
+       \sqrt{ (u - v) \cdot V^{-1} \cdot (u - v)^{T} }
+
+    Args:
+        u:           1-D array or collection of 1-D arrays
+        v:           1-D array or collection of 1-D arrays
+        VI:          Inverse of the covariance matrix
+
+    Returns:
+        float:       Mahalanobis distance
+    """
+
+    VI = _asarray(VI)
+    if VI.ndim != 2:
+        raise ValueError("VI must have a dimension of 2.")
+
+    U, V = _broadcast_uv(u, v)
+
+    U = U.astype(float)
+    V = V.astype(float)
+    VI = VI.astype(float)
+
+    U_sub_V = U - V
+    result = dask.array.sqrt((dask.array.tensordot(U_sub_V, VI, axes=1) * U_sub_V).sum(axis=-1))
+
+    result = _unbroadcast_uv(u, v, result)
+
+    return result
+
+
+@_broadcast_uv_wrapper
+def sqeuclidean(u, v):
+    """
+    Finds the squared Euclidean distance between two 1-D arrays.
+
+    .. math::
+
+       \lVert u - v \\rVert_{2}^{2}
+
+    Args:
+        u:           1-D array or collection of 1-D arrays
+        v:           1-D array or collection of 1-D arrays
+
+    Returns:
+        float:       squared Euclidean distance
+    """
+
+    u = u.astype(float)
+    v = v.astype(float)
+
+    result = (abs(u - v) ** 2).sum(axis=-1)
 
     return result

@@ -13,6 +13,5 @@ setup(
     name="DIESEL",
     packages=["diesel"],  # Replace with the names of your packages
     ext_modules=cythonize(extensions),
-    include_dirs=[numpy.get_include()]
+    include_dirs=[numpy.get_include()],
 )
-

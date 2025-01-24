@@ -1,21 +1,19 @@
-""" Implementation of non-stationary Gaussian process models.
+"""Implementation of non-stationary Gaussian process models."""
 
-"""
 import dask.array as da
 
 
 class BaCompositeGP:
-    """ Composite non-stationary GP model as defined in Ba and Joseph (2012).
+    """Composite non-stationary GP model as defined in Ba and Joseph (2012)."""
 
-    """
     def __init__(self, global_covariance, local_covariance):
         self.global_covariance = global_covariance
         self.local_covariance = local_covariance
         self.n_iter_vs = 5
 
     def _compute_helper_matrices(self, pred_pts, dat_pts, y, vs_data, lmbda):
-        """ Compute the matrices involced in the global and local prediction. 
-        This function centralizes computations that are shared across the different 
+        """Compute the matrices involced in the global and local prediction.
+        This function centralizes computations that are shared across the different
         prediction scenarios.
 
         pred_pts: dask.array (m, n_dims)
@@ -51,10 +49,10 @@ class BaCompositeGP:
         return G_cov_mat, L_cov_mat, G_cross_cov, L_cross_cov, Sigma_sqrt, inv
 
     def predict(self, pred_pts, dat_pts, y, lmbda, b):
-        """ Compute prediction given some data. 
+        """Compute prediction given some data.
         The local variances are estimated iteratively in an inner loop.
 
-        This function returns the global and local part of the prediction separately. 
+        This function returns the global and local part of the prediction separately.
         The complete prediction is the sum of both.
 
         Parameters
@@ -92,18 +90,15 @@ class BaCompositeGP:
 
         # Compute final predictions and return
         # Get matrices needed for prediction.
-        (G_cov_mat, L_cov_mat, G_cross_cov,
-                L_cross_cov, Sigma_sqrt, inv) = self._compute_helper_matrices(
-                        pred_pts, dat_pts, y, vs_data, lmbda)
+        (G_cov_mat, L_cov_mat, G_cross_cov, L_cross_cov, Sigma_sqrt, inv) = (
+            self._compute_helper_matrices(pred_pts, dat_pts, y, vs_data, lmbda)
+        )
         # Estimate global mean.
         ones = da.ones(y.shape)
-        mu_hat = (
-                da.linalg.inv(ones.T @ inv @ ones)
-                @
-                ones.T @ inv @ y)
+        mu_hat = da.linalg.inv(ones.T @ inv @ ones) @ ones.T @ inv @ y
 
         # Estimate the predictors.
-        misfit = y - mu_hat * ones 
+        misfit = y - mu_hat * ones
         pred_global = mu_hat + G_cross_cov @ inv @ misfit
         pred_local = lmbda * da.sqrt(vs_pred) * L_cross_cov @ Sigma_sqrt @ inv @ misfit
 
@@ -114,7 +109,7 @@ class BaCompositeGP:
         return pred_global, pred_local
 
     def predict_global(self, pred_pts, dat_pts, y, vs_data, lmbda):
-        """ Fit the global part of the composite GP, for a fixed vector 
+        """Fit the global part of the composite GP, for a fixed vector
         of local variance scalings vs.
 
         Parameters
@@ -138,25 +133,22 @@ class BaCompositeGP:
         """
         y = y.reshape(-1, 1)
         # Get matrices needed for prediction.
-        (G_cov_mat, L_cov_mat, G_cross_cov,
-                L_cross_cov, Sigma_sqrt, inv) = self._compute_helper_matrices(
-                        pred_pts, dat_pts, y, vs_data, lmbda)
+        (G_cov_mat, L_cov_mat, G_cross_cov, L_cross_cov, Sigma_sqrt, inv) = (
+            self._compute_helper_matrices(pred_pts, dat_pts, y, vs_data, lmbda)
+        )
 
         # Estimate global mean.
         ones = da.ones(y.shape)
-        mu_hat = (
-                da.linalg.inv(ones.T @ inv @ ones)
-                @
-                ones.T @ inv @ y)
+        mu_hat = da.linalg.inv(ones.T @ inv @ ones) @ ones.T @ inv @ y
 
         # Estimate the global predictor.
-        misfit = y - mu_hat * ones 
+        misfit = y - mu_hat * ones
         pred_global = mu_hat + G_cross_cov @ inv @ misfit
         return pred_global
 
     def estimate_vs(self, pred_pts, dat_pts, y, pred_global_data, b):
-        """ Estimate the v(x) local variance scaling using eq (18) 
-        from Ba and Joseph (2012). Returns the local variances 
+        """Estimate the v(x) local variance scaling using eq (18)
+        from Ba and Joseph (2012). Returns the local variances
         at the data points and at the prediction points.
 
         Parameters
@@ -179,18 +171,18 @@ class BaCompositeGP:
             Estimated local variance scalings at the data points.
 
         """
-        s_2 = (y - pred_global_data)**2
+        s_2 = (y - pred_global_data) ** 2
 
-        # One needs the original (global) covariance model, but 
+        # One needs the original (global) covariance model, but
         # with lengthscales scaled by b.
         mod_lengthscales = b * self.global_covariance.lengthscales
 
         gb_pred = self.global_covariance.covariance_matrix(
-                pred_pts, dat_pts,
-                lengthscales=mod_lengthscales)
+            pred_pts, dat_pts, lengthscales=mod_lengthscales
+        )
         gb_data = self.global_covariance.covariance_matrix(
-                dat_pts, dat_pts,
-                lengthscales=mod_lengthscales)
+            dat_pts, dat_pts, lengthscales=mod_lengthscales
+        )
 
         ones = da.ones((dat_pts.shape[0], 1))
 

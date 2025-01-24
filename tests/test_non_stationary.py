@@ -9,12 +9,12 @@ def main():
     # Instantiate a local cluster, to mimick distributed computations, but on a single machine.
     cluster = ds.cluster.LocalCluster()
     client = Client(cluster)
+    __builtins__.CLIENT = client
     
     # Build a square grid with 30^2 elements.
     grid = ds.gridding.SquareGrid(n_pts_1d=60)
     grid_pts = grid.grid_pts
 
-    lambda0 = 0.1
     lengthscales = da.from_array([0.1, 0.4])
     kernel = ds.covariance.matern32(lengthscales)
 
@@ -34,7 +34,7 @@ def main():
         1.265,
         1.45,
         2.2, 2.3, 2.4, 2.5]).reshape(-1, 1)
-    true_fun = lambda x: np.sin(10 * np.pi * x) / (2 * x) + (x - 1)**4
+    def true_fun(x): np.sin(10 * np.pi * x) / (2 * x) + (x - 1)**4
     y = true_fun(dat_pts)
 
     myGP = ds.BaCompositeGP(
@@ -45,7 +45,7 @@ def main():
     b = 1
 
     pred_pts = np.linspace(0.5, 2.5, 200).reshape(-1, 1)
-    true_fun = lambda x: np.sin(10 * np.pi * x) / (2 * x) + (x - 1)**4
+    def true_fun(x): np.sin(10 * np.pi * x) / (2 * x) + (x - 1)**4
     preds_global, preds_local = myGP.predict(pred_pts, dat_pts, y, lmbda, b)
 
     plt.plot(pred_pts, true_fun(pred_pts))

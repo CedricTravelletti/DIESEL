@@ -1,31 +1,32 @@
-""" Helper functions for the DIESEL package.
+"""Helper functions for the DIESEL package."""
 
-"""
 import numpy as np
 from sklearn.neighbors import BallTree
 
 import torch
+import warnings
+from numpy.linalg import LinAlgError
 
 import dask.array as da
-from dask.distributed import wait, progress
-from dask.utils import apply, derived_from
-from dask.array.core import (Array, asanyarray, asarray, blockwise, broadcast_arrays,
-        broadcast_shapes, broadcast_to, concatenate, elemwise, from_array, implements,
-        is_scalar_for_elemwise, map_blocks, stack, tensordot_lookup)
-from dask.array.routines import array, dot
+from dask.utils import derived_from, concatenate, asarray
 
+from dask.array.routines import array, dot
 
 
 CHUNK_REDUCTION_FACTOR = 4
 
+
 def find_closest_multiple(x, base):
-    closest_lower = int(base * round(float(x)/base))
-    if closest_lower == x: return x
-    else: return closest_lower + base
+    closest_lower = int(base * round(float(x) / base))
+    if closest_lower == x:
+        return x
+    else:
+        return closest_lower + base
+
 
 def cholesky_invert(A, debug_string):
-    """ Computes the (lower) Cholesky factor and the inverse 
-    of a symmetric positive definite matrix using Cholesky decomposition 
+    """Computes the (lower) Cholesky factor and the inverse
+    of a symmetric positive definite matrix using Cholesky decomposition
     and backward substitution.
 
     Parameters
@@ -39,36 +40,36 @@ def cholesky_invert(A, debug_string):
 
     """
     # Note that the daks cholesky implementation requires square chunks.
-    # Hence, to keep chunks of a manageable size, one possible trick is to make 
-    # R into a matrix wiht shape divisible by CHUNK_REDUCTION_FACTOR, to have CHUNK_REDUCTION_FACTOR chunks along each 
+    # Hence, to keep chunks of a manageable size, one possible trick is to make
+    # R into a matrix wiht shape divisible by CHUNK_REDUCTION_FACTOR, to have CHUNK_REDUCTION_FACTOR chunks along each
     # dimension.
-    # Appending with identity matrix (in block diag fashion) allows us 
-    # to recover the original Cholesky decomposition from the one of the 
+    # Appending with identity matrix (in block diag fashion) allows us
+    # to recover the original Cholesky decomposition from the one of the
     # augmented matrix.
 
     # If small enough then use only one chunk.
-    if (A.shape[0] < CHUNK_REDUCTION_FACTOR - 1):
+    if A.shape[0] < CHUNK_REDUCTION_FACTOR - 1:
         chunk_size = A.shape[0]
         A_rechunked = A.rechunk(chunk_size)
         shape_diff = 0
 
     # If already square, then proceed.
-    elif len(set(A.chunks[0] + A.chunks[1])) == 1: 
+    elif len(set(A.chunks[0] + A.chunks[1])) == 1:
         A_rechunked = A
         shape_diff = 0
         chunk_size = A.chunks[0][0]
 
-    # Else append identity matrix to get a shape that is 
+    # Else append identity matrix to get a shape that is
     # divisible by CHUNK_REDUCTION_FACTOR.
     else:
         new_shape = find_closest_multiple(A.shape[0], CHUNK_REDUCTION_FACTOR)
         if new_shape > 0:
             shape_diff = new_shape - A.shape[0]
             A_rechunked = da.vstack(
-                    [
-                        da.hstack([A, da.zeros((A.shape[0], shape_diff))]),
-                        da.hstack([da.zeros((shape_diff, A.shape[0])), da.eye(shape_diff)])
-                    ]
+                [
+                    da.hstack([A, da.zeros((A.shape[0], shape_diff))]),
+                    da.hstack([da.zeros((shape_diff, A.shape[0])), da.eye(shape_diff)]),
+                ]
             )
         chunk_size = int(new_shape / CHUNK_REDUCTION_FACTOR)
         A_rechunked = A_rechunked.rechunk(chunk_size)
@@ -76,12 +77,14 @@ def cholesky_invert(A, debug_string):
     # TEMP: try to compute to see if fails.
     try:
         R = da.linalg.cholesky(A_rechunked, lower=False)
-    except:
+    except LinAlgError:
         print("Error in Cholesky")
         print(debug_string)
     try:
-        R_inv = da.linalg.solve_triangular(R, da.linalg.eye(R.shape[0], chunks=chunk_size), lower=False)
-    except:
+        R_inv = da.linalg.solve_triangular(
+            R, da.linalg.eye(R.shape[0], chunks=chunk_size), lower=False
+        )
+    except LinAlgError:
         print("Error in solve triangular")
         print(debug_string)
 
@@ -91,18 +94,19 @@ def cholesky_invert(A, debug_string):
         R_inv = R_inv[:-shape_diff, :-shape_diff]
     return da.transpose(R), da.matmul(R_inv, da.transpose(R_inv))
 
+
 def svd_invert(A, svd_rank=None, client=None):
     if client is None:
         # Get the client stored in the global variable.
         from builtins import CLIENT as client
-    
-    if svd_rank is None: svd_rank = A.shape[0]
+
+    if svd_rank is None:
+        svd_rank = A.shape[0]
     # Compute compressed SVD.
-    # WARNING: dask return the already transposed version of v, 
+    # WARNING: dask return the already transposed version of v,
     # so that A = u @ diag(s) @ v.
     # This is poorly documented in dask.
-    u, s, v = da.linalg.svd_compressed(
-                    A, k=svd_rank, compute=True) 
+    u, s, v = da.linalg.svd_compressed(A, k=svd_rank, compute=True)
     u, s, v = client.persist(u), client.persist(s), client.persist(v)
 
     # Compute (symmetric) square root.
@@ -114,6 +118,7 @@ def svd_invert(A, svd_rank=None, client=None):
 
     return sqrt, inv
 
+
 def cross_covariance(X, Y, bias=False, ddof=None, dtype=None, rowvar=True):
     if not rowvar:
         X_in = X.T
@@ -122,8 +127,7 @@ def cross_covariance(X, Y, bias=False, ddof=None, dtype=None, rowvar=True):
         X_in = X
         Y_in = Y
     if ddof is not None and ddof != int(ddof):
-        raise ValueError(
-            "ddof must be integer")
+        raise ValueError("ddof must be integer")
 
     """
     if dtype is None:
@@ -147,15 +151,16 @@ def cross_covariance(X, Y, bias=False, ddof=None, dtype=None, rowvar=True):
     # Subtract the mean.
     X_centred = X_in - avg_X[:, None]
     Y_centred = Y_in - avg_Y[:, None]
-    
+
     Y_T = Y_centred.T
     c = torch.matmul(X_centred, Y_T.conj())
     c *= np.true_divide(1, fact)
     return c.squeeze()
 
+
 def build_forward_mean_per_cell(mean_ds, data_ds):
-    """ Build the forward operator corresponding to a given 
-    model grid and data point cloud. 
+    """Build the forward operator corresponding to a given
+    model grid and data point cloud.
     This function only assimilated the mean observed value in each cell.
 
     Parameters
@@ -175,8 +180,8 @@ def build_forward_mean_per_cell(mean_ds, data_ds):
     # Get the model cell index corresponding to each observations.
     matched_inds = match_vectors_indices(mean_ds, data_ds)
 
-    # Get unique indices. For the ones that appear several time, 
-    # we will assimilat the mean. I.e. we assimilat the mean observed data 
+    # Get unique indices. For the ones that appear several time,
+    # we will assimilat the mean. I.e. we assimilat the mean observed data
     # in each cell where we have observations.
     unique_indices = np.unique(matched_inds)
     mean_datas = [np.mean(data_ds.values[matched_inds == i]) for i in unique_indices]
@@ -184,7 +189,12 @@ def build_forward_mean_per_cell(mean_ds, data_ds):
     std_datas = [np.std(data_ds.values[matched_inds == i]) for i in unique_indices]
     n_datas = [len(data_ds.values[matched_inds == i]) for i in unique_indices]
 
-    mean_datas, median_datas, std_datas, n_datas = np.array(mean_datas), np.array(median_datas), np.array(std_datas), np.array(n_datas)
+    mean_datas, median_datas, std_datas, n_datas = (
+        np.array(mean_datas),
+        np.array(median_datas),
+        np.array(std_datas),
+        np.array(n_datas),
+    )
 
     data_lats = mean_ds.latitude[unique_indices]
     data_lons = mean_ds.longitude[unique_indices]
@@ -194,11 +204,12 @@ def build_forward_mean_per_cell(mean_ds, data_ds):
         G[i, unique_indices[i]] = 1.0
     return G, mean_datas, std_datas, median_datas, n_datas, data_lons, data_lats
 
+
 @derived_from(np)
 def cov(m, y=None, rowvar=1, bias=0, ddof=None):
-    """ Re-implementation of the dask.cov function. 
-    The goal is to restrict the computation to float32 
-    to save memory, apart from that, the implementation is the same. 
+    """Re-implementation of the dask.cov function.
+    The goal is to restrict the computation to float32
+    to save memory, apart from that, the implementation is the same.
 
     """
     if ddof is not None and ddof != int(ddof):
@@ -243,11 +254,12 @@ def cov(m, y=None, rowvar=1, bias=0, ddof=None):
     else:
         return (dot(X, X.T.conj()) / fact).squeeze()
 
+
 def match_vectors_indices(base_vector, vector_to_match):
-    """" Given two stacked datasets (vectors), for each element in the dataset_tomatch,
+    """ " Given two stacked datasets (vectors), for each element in the dataset_tomatch,
     find the index of the element in the base dataset that is closest.
 
-    Note that the base dataset should contain only one element at each spatial locaiton, 
+    Note that the base dataset should contain only one element at each spatial locaiton,
     so that the matched index is unique.
 
     Parameters
@@ -260,7 +272,7 @@ def match_vectors_indices(base_vector, vector_to_match):
     Returns
     -------
     Array[int] (vector_to_match.shape[0])
-        Indices in the base dataset of closest element for each 
+        Indices in the base dataset of closest element for each
         element of the dataset_tomatch.
 
     """
@@ -269,7 +281,7 @@ def match_vectors_indices(base_vector, vector_to_match):
     lon_rad = np.deg2rad(base_vector.longitude.values.astype(np.float32))
 
     # Build a ball tree to make nearest neighbor queries faster.
-    ball = BallTree(np.vstack([lat_rad, lon_rad]).T, metric='haversine')
+    ball = BallTree(np.vstack([lat_rad, lon_rad]).T, metric="haversine")
 
     # Define grid to be matched.
     lon_tomatch = np.deg2rad(vector_to_match.longitude.values.astype(np.float32))
@@ -277,7 +289,7 @@ def match_vectors_indices(base_vector, vector_to_match):
     coarse_grid_list = np.vstack([lat_tomatch.T, lon_tomatch.T]).T
 
     distances, index_array_1d = ball.query(coarse_grid_list, k=1)
-    
+
     # Convert back to kilometers.
     distances_km = 6371 * distances
     # Sanity check.
