@@ -251,7 +251,9 @@ def cdist(XA, XB, metric="euclidean", **kwargs):
             kwargs.setdefault("p", 2)
         elif metric == seuclidean:
             if "V" not in kwargs:
-                kwargs["V"] = dask.array.var(dask.array.vstack([XA, XB]), axis=0, ddof=1)
+                kwargs["V"] = dask.array.var(
+                    dask.array.vstack([XA, XB]), axis=0, ddof=1
+                )
         elif metric == wminkowski:
             kwargs.setdefault("p", 2)
 
@@ -362,7 +364,9 @@ def mahalanobis(u, v, VI):
     VI = VI.astype(float)
 
     U_sub_V = U - V
-    result = dask.array.sqrt((dask.array.tensordot(U_sub_V, VI, axes=1) * U_sub_V).sum(axis=-1))
+    result = dask.array.sqrt(
+        (dask.array.tensordot(U_sub_V, VI, axes=1) * U_sub_V).sum(axis=-1)
+    )
 
     result = _unbroadcast_uv(u, v, result)
 

@@ -1,22 +1,22 @@
-""" Module for sampling from multivariate gaussians.
+"""Module for sampling from multivariate gaussians."""
 
-"""
 import dask.array as da
 
 
 class SvdSampler:
-    """ Sample multivariate gaussian from SVD decomposition of 
+    """Sample multivariate gaussian from SVD decomposition of
     its covariance matrix.
 
     Parameters
     ----------
     svd_u: dask_array
-        Left singular vectors of the covariance matrix 
+        Left singular vectors of the covariance matrix
         (as obtained from da.linalg.svd_compressed).
     svd_s: dask_array
         Vector of singular values of the covariance matrix.
 
     """
+
     def __init__(self, svd_u, svd_s):
         self.svd_u, self.svd_s = svd_u, svd_s
 
@@ -27,7 +27,7 @@ class SvdSampler:
         self.dim = svd_u.shape[0]
 
     def sample(self, n_samples):
-        """ Generate samples.
+        """Generate samples.
 
         Parameters
         ----------
@@ -43,10 +43,10 @@ class SvdSampler:
         samples = da.dot(self.cholesky_lazy, samples).squeeze().T
         return samples
 
-class CholeskySampler:
-    """ Non lazy. 
 
-    """
+class CholeskySampler:
+    """Non lazy."""
+
     def __init__(self, covariance_matrix):
         self.cholesky = da.linalg.cholesky(covariance_matrix, lower=True).compute()
 

@@ -85,7 +85,9 @@ class BaCompositeGP:
         for i in range(self.n_iter_vs):
             # Estimate the global predictor at the data points.
             pred_global_data = self.predict_global(dat_pts, dat_pts, y, vs_data, lmbda)
-            vs_pred, vs_data = self.estimate_vs(pred_pts, dat_pts, y, pred_global_data, b)
+            vs_pred, vs_data = self.estimate_vs(
+                pred_pts, dat_pts, y, pred_global_data, b
+            )
             print(vs_data.compute())
 
         # Compute final predictions and return

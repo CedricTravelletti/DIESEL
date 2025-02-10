@@ -1,11 +1,10 @@
-""" Basic covariance estimation procedures.
+"""Basic covariance estimation procedures."""
 
-"""
 from diesel.utils import cov
 
 
 def empirical_covariance(ensemble):
-    """ Compute the emprirical covariance of an ensemble.
+    """Compute the emprirical covariance of an ensemble.
 
     Parameters
     ----------
@@ -20,8 +19,7 @@ def empirical_covariance(ensemble):
     # Estimate using homemade (float32) implemenation of da.cov
     return cov(ensemble, rowvar=False)
 
-def localize_covariance(base_cov, localization_matrix):
-    """ Performs covariance localization.
 
-    """
+def localize_covariance(base_cov, localization_matrix):
+    """Performs covariance localization."""
     return base_cov * localization_matrix

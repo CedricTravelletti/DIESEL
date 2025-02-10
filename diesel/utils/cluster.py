@@ -6,7 +6,9 @@ be used to run the computation.
 from dask_jobqueue import SLURMCluster
 
 
-def UbelixCluster(n_nodes, mem_per_node=16, cores_per_node=1, partition="epyc2", qos="job_epyc2"):
+def UbelixCluster(
+    n_nodes, mem_per_node=16, cores_per_node=1, partition="epyc2", qos="job_epyc2"
+):
     """Provision a Daks cluster on the Ubelix cluster of UniBern.
 
     Parameters
