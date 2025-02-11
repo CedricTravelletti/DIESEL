@@ -3,12 +3,12 @@
 <!-- markdownlint-disable no-duplicate-header -->
 
 <div align="center">
-  <img src="https://github.com/CedricTravelletti/DIESEL/blob/main/figures/logo.png?raw=true" width="60%" alt="DIESEL" />
+  <img src="https://github.com/CedricTravelletti/DIESEL/blob/main/logo.png?raw=true" width="60%" alt="DIESEL" />
 </div>
 <hr>
 <div align="center" style="line-height: 1;">
-  <a href="https://www.deepseek.com/" target="_blank" style="margin: 2px;">
-    <img alt="Developed using" src="https://github.com/deepseek-ai/DeepSeek-V2/blob/main/figures/badge.svg?raw=true" style="display: inline-block; vertical-align: middle;"/>
+  Developed using <a href="https://www.deepseek.com/" target="_blank" style="margin: 2px;">
+    <img alt="Deepseek" src="https://github.com/deepseek-ai/DeepSeek-V2/blob/main/figures/badge.svg?raw=true" style="display: inline-block; vertical-align: middle;"/>
   </a>
 
 </div>
