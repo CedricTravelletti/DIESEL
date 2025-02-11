@@ -3,7 +3,7 @@
 <!-- markdownlint-disable no-duplicate-header -->
 
 <div align="center">
-  <img src="https://github.com/CedricTravelletti/DIESEL/blob/main/logo.png?raw=true" width="60%" alt="DIESEL" />
+  <img src="https://github.com/CedricTravelletti/DIESEL/blob/main/logo.png?raw=true" width="100%" alt="DIESEL" />
 </div>
 <hr>
 <div align="center" style="line-height: 1;">
