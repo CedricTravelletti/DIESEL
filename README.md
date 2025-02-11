@@ -7,7 +7,7 @@
 </div>
 <hr>
 <div align="center" style="line-height: 1;">
-  Developed using <a href="https://www.deepseek.com/" target="_blank" style="margin: 2px;">
+ <span class="align-text-top"> Developed using</span><a href="https://www.deepseek.com/" target="_blank" style="margin: 2px;">
     <img alt="Deepseek" src="https://github.com/deepseek-ai/DeepSeek-V2/blob/main/figures/badge.svg?raw=true" style="display: inline-block; vertical-align: middle;"/>
   </a>
 
