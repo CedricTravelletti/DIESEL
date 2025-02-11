@@ -1,3 +1,19 @@
+<!-- markdownlint-disable first-line-h1 -->
+<!-- markdownlint-disable html -->
+<!-- markdownlint-disable no-duplicate-header -->
+
+<div align="center">
+  <img src="https://github.com/CedricTravelletti/DIESEL/blob/main/figures/logo.png?raw=true" width="60%" alt="DIESEL" />
+</div>
+<hr>
+<div align="center" style="line-height: 1;">
+  <a href="https://www.deepseek.com/" target="_blank" style="margin: 2px;">
+    <img alt="Developed using" src="https://github.com/deepseek-ai/DeepSeek-V2/blob/main/figures/badge.svg?raw=true" style="display: inline-block; vertical-align: middle;"/>
+  </a>
+
+</div>
+---
+
 # DIESEL
 DIESEL is a package for DIstributed EStimation of EnsembLe covariance matrices.
 
@@ -5,7 +21,19 @@ It leverages distributed arrays (DASK) to allow handling very large matrices and
 
 See the [project website](https://cedrictravelletti.github.io/DIESEL/) for more information.
 
+## Installation
+This project uses the very fast [uv](https://docs.astral.sh/uv/) virtual environment and package manager. A virtual environment 
+containing all needed dependencies can be created using:
+```
+uv sync
+```
+One can then activate the environment using:
+```
+source .venv/bin/activate
+```
+
 ## Available Functionalities
+
 
 - **Gridding**:
   - `SquareGrid`: Build and manipulate square grids.
@@ -49,10 +77,9 @@ See the [project website](https://cedrictravelletti.github.io/DIESEL/) for more 
 - **User Guides**:
   - Detailed user guides and best practices.
 
-## Installation
+## Roadmap 
+- [ ] demonstration of covariance estimation on ERA5 (ensemble members created artificially)
+- [ ] high-resolution covariance regularization 
+- [ ] high-resolution data assimilation 
+- [ ] scaling tests (workers) 
 
-To install DIESEL, use pip:
-
-```bash
-pip install diesel
-```
