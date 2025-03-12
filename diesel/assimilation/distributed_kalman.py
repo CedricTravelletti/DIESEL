@@ -4,11 +4,11 @@ In DIESEL, an ensemble is a dask array of shape (n_members, dim).
 
 """
 
-from dask.array import matmul, eye, transpose
-from diesel.utils import cholesky_invert, svd_invert
-
 # Use torch for the sequential updating (which is done entirely on the scheduler.
 import torch
+from dask.array import eye, matmul, transpose
+
+from diesel.utils import cholesky_invert, svd_invert
 
 torch.set_num_threads(8)
 # Select gpu if available and fallback to cpu else.
@@ -79,9 +79,7 @@ class EnsembleKalmanFilter:
         _, inv = cholesky_invert(to_invert)
         return self._update_mean(mean, G, y, cov_pushfwd, inv)
 
-    def _update_anomalies(
-        self, mean, ensemble, G, data_std, cov_pushfwd, sqrt, svd_rank=1000
-    ):
+    def _update_anomalies(self, mean, ensemble, G, data_std, cov_pushfwd, sqrt, svd_rank=1000):
         """Helper function for updating the ensemble members over a single period (step).
         This function assumes that the compute intensive intermediate matrices
         have already been computed.
@@ -125,9 +123,7 @@ class EnsembleKalmanFilter:
         kalman_gain_tilde = matmul(cov_pushfwd, matmul(inv_sqrt.T, inv_2))
 
         # Compute predictions for each member using batched matrix multiplication.
-        base_pred = matmul(
-            G, anomalies[:, :, None]
-        )  # Resulting shape (n_members, m, 1)
+        base_pred = matmul(G, anomalies[:, :, None])  # Resulting shape (n_members, m, 1)
         anomalies_updated = anomalies[:, :, None] - matmul(kalman_gain_tilde, base_pred)
 
         # We remove the last dimension before returning.

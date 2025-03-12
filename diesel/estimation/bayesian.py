@@ -37,8 +37,6 @@ class InverseWishartPrior:
         sample_cov = da.cov(samples, rowvar=False, bias=True)
 
         lazy_posterior_mean = (
-            1
-            / (n + self.dof - self.dim - 1)
-            * (n * sample_cov + self.lazy_scale_matrix)
+            1 / (n + self.dof - self.dim - 1) * (n * sample_cov + self.lazy_scale_matrix)
         )
         return lazy_posterior_mean

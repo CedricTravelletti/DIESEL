@@ -6,9 +6,7 @@ be used to run the computation.
 from dask_jobqueue import SLURMCluster
 
 
-def UbelixCluster(
-    n_nodes, mem_per_node=16, cores_per_node=1, partition="epyc2", qos="job_epyc2"
-):
+def UbelixCluster(n_nodes, mem_per_node=16, cores_per_node=1, partition="epyc2", qos="job_epyc2"):
     """Provision a Daks cluster on the Ubelix cluster of UniBern.
 
     Parameters
@@ -27,13 +25,13 @@ def UbelixCluster(
     cluster
 
     """
-    mem_per_node = "{} GB".format(mem_per_node)
+    mem_per_node = f"{mem_per_node} GB"
     cluster = SLURMCluster(
         cores=cores_per_node,
         memory=mem_per_node,
         death_timeout=6000,
         walltime="06:00:00",
-        job_extra=['--qos="{}"'.format(qos), '--partition="{}"'.format(partition)],
+        job_extra=[f'--qos="{qos}"', f'--partition="{partition}"'],
     )
 
     # Manually define the size of the cluster.

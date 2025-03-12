@@ -1,18 +1,20 @@
 """Scoring functions to evaluate quality of probabilistic forecasts."""
 
-import numpy as np
 import dask.array as da
+import numpy as np
 
 
 def compute_RE_score(mean_prior, mean_updated, reference, min_lat=None, max_lat=None):
     """Reduction of error skill score.
-    This score compares a base prediction (mean_prior) with an enhanced prediction (mean_updated).
-    If the enhanced prediction predicts the reference better than the base one, then the score
-    is > 0, the score being 1 if the reconstruction is perfect.
+    This score compares a base prediction (mean_prior) with an enhanced prediction
+    (mean_updated).
+    If the enhanced prediction predicts the reference better than the base one,
+    then the score is > 0, the score being 1 if the reconstruction is perfect.
 
     Note that this score averages over times steps and produces a spatial map.
 
-    See Valler et al., Impact of different estimations of the background-error covariance matrix on climate reconstructions based on data assimilation (2019).
+    See Valler et al., Impact of different estimations of the background-error
+    covariance matrix on climate reconstructions based on data assimilation (2019).
 
     Parameters
     ----------
@@ -62,7 +64,9 @@ def compute_RE_score(mean_prior, mean_updated, reference, min_lat=None, max_lat=
         reference.reshape(-1),
     )
 
-    RE_score = 1 - np.mean((mean_updated - reference) ** 2) / np.mean((mean_prior - reference) ** 2)
+    RE_score = 1 - np.mean((mean_updated - reference) ** 2) / np.mean(
+        (mean_prior - reference) ** 2
+    )
     return RE_score
 
 
@@ -115,7 +119,8 @@ def compute_energy_score(ensemble, reference, min_lat=None, max_lat=None):
     This scores evaluates how well a probabilistic forecast (given by an ensemble)
     predicts a given reference. The energy score is relative in the sense that it is used to
     compare different forecasts, lower score being better.
-    The energy score is a sum of a misfit term and a spread term. Here both are returned separately.
+    The energy score is a sum of a misfit term and a spread term.
+    Here both are returned separately.
 
     See Jordan et al., Evaluating Probabilistic Forecasts with scoringRule (2018).
 

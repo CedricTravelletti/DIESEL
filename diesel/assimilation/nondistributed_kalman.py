@@ -2,10 +2,12 @@
 This is only used for benchmarking agains the distributed version.
 """
 
-import torch
 import time
+
 import dask.array as da
 import dask.distributed as dd
+import torch
+
 from diesel.utils.matrix import cross_covariance
 
 torch.set_num_threads(8)
@@ -118,7 +120,7 @@ class SequentialEnKF:
                 now = time.time()
                 elapsed_time = now - last_time
                 last_time = now
-                print("Time since last persisting: {}.".format(elapsed_time))
+                print(f"Time since last persisting: {elapsed_time}.")
                 mean_updated = global_client.persist(mean_updated)
                 ensemble_updated = global_client.persist(ensemble_updated)
                 dd.wait(ensemble_updated)
@@ -145,9 +147,7 @@ class SequentialEnKFnondask:
     def __init__(self):
         pass
 
-    def _update_anomalies_single_nondask(
-        self, mean, ensemble, G, data_std, cov_pushfwd, sqrt
-    ):
+    def _update_anomalies_single_nondask(self, mean, ensemble, G, data_std, cov_pushfwd, sqrt):
         """Helper function for updating the ensemble members during non-dask sequential
         updtating. only processes a single data point.
 
@@ -183,12 +183,8 @@ class SequentialEnKFnondask:
         kalman_gain_tilde = (inv_sqrt * inv_2) * cov_pushfwd
 
         # Compute predictions for each member using batched matrix multiplication.
-        base_pred = torch.matmul(
-            G, anomalies[:, :, None]
-        )  # Resulting shape (n_members, m, 1)
-        anomalies_updated = anomalies[:, :, None] - torch.matmul(
-            kalman_gain_tilde, base_pred
-        )
+        base_pred = torch.matmul(G, anomalies[:, :, None])  # Resulting shape (n_members, m, 1)
+        anomalies_updated = anomalies[:, :, None] - torch.matmul(kalman_gain_tilde, base_pred)
 
         # We remove the last dimension before returning.
         return anomalies_updated.squeeze(-1)
@@ -239,9 +235,7 @@ class SequentialEnKFnondask:
             # and send it to the GPU.
             if i % 500 == 0:
                 i_pushfwd_start = i  # The index at which the local pushfwd starts.
-                local_pushfwd = global_client.compute(
-                    cov_pushfwd_full[:, i : i + 500]
-                ).result()
+                local_pushfwd = global_client.compute(cov_pushfwd_full[:, i : i + 500]).result()
                 local_pushfwd = torch.from_numpy(local_pushfwd).to(DEVICE).float()
 
             # One data points.
@@ -320,9 +314,7 @@ class SequentialEnKFnondask:
 
             cov_pushfwd = cov_pushfwd.to(DEVICE).float()
             loc_obs_cov = (
-                torch.from_numpy(
-                    global_client.compute(localization_matrix[:, obs_ind]).result()
-                )
+                torch.from_numpy(global_client.compute(localization_matrix[:, obs_ind]).result())
                 .to(DEVICE)
                 .float()
             )
@@ -340,7 +332,8 @@ class SequentialEnKFnondask:
             anomalies_updated = self._update_anomalies_single_nondask(
                 mean_updated, ensemble_updated, G_seq, data_std, cov_pushfwd, sqrt
             )
-            # Warning, have to update mean after ensemble, since ensemble use the prior mean in the update.
+            # Warning, have to update mean after ensemble,
+            # since ensemble use the prior mean in the update.
             mean_updated = mean_updated + torch.matmul(kalman_gain, prior_misfit)
             # Add the mean to get ensemble from anomalies.
             ensemble_updated = mean_updated.reshape(-1)[None, :] + anomalies_updated

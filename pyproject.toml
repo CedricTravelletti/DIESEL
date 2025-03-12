@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "bokeh>=3.6.3",
+    "cartopy>=0.24.1",
     "dask>=2025.1.0",
     "dask-jobqueue>=0.9.0",
     "distributed>=2025.1.0",
@@ -16,6 +17,7 @@ dependencies = [
     "notebook>=7.3.2",
     "numpy>=2.2.2",
     "pyqt6>=6.8.0",
+    "ruff>=0.9.10",
     "scikit-learn>=1.6.1",
     "seaborn>=0.13.2",
     "torch>=2.5.1",
@@ -52,3 +54,24 @@ requires = [
     "numpy",
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 99
+
+[tool.ruff.lint]
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+    # naming
+    "N801",
+]

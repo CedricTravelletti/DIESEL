@@ -5,10 +5,9 @@ Copied from https://github.com/jakirkham/dask-distance
 
 import functools
 
-import numpy
-
 import dask
 import dask.array
+import numpy
 
 
 def _asarray(a):
@@ -237,8 +236,10 @@ def cdist(XA, XB, metric="euclidean", **kwargs):
     else:
         try:
             metric = metric.decode("utf-8")
-        except AttributeError:
-            pass
+        except AttributeError as err:
+            raise ValueError(
+                f"Metric {metric} is not callable and could not be decoded to a known metric."
+            ) from err
 
         metric = func_mappings[metric]
 
@@ -251,9 +252,7 @@ def cdist(XA, XB, metric="euclidean", **kwargs):
             kwargs.setdefault("p", 2)
         elif metric == seuclidean:
             if "V" not in kwargs:
-                kwargs["V"] = dask.array.var(
-                    dask.array.vstack([XA, XB]), axis=0, ddof=1
-                )
+                kwargs["V"] = dask.array.var(dask.array.vstack([XA, XB]), axis=0, ddof=1)
         elif metric == wminkowski:
             kwargs.setdefault("p", 2)
 
@@ -364,9 +363,7 @@ def mahalanobis(u, v, VI):
     VI = VI.astype(float)
 
     U_sub_V = U - V
-    result = dask.array.sqrt(
-        (dask.array.tensordot(U_sub_V, VI, axes=1) * U_sub_V).sum(axis=-1)
-    )
+    result = dask.array.sqrt((dask.array.tensordot(U_sub_V, VI, axes=1) * U_sub_V).sum(axis=-1))
 
     result = _unbroadcast_uv(u, v, result)
 

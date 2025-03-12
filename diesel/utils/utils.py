@@ -31,9 +31,7 @@ def build_forward_mean_per_cell(mean_ds, data_ds):
     # in each cell where we have observations.
     unique_indices = np.unique(matched_inds)
     mean_datas = [np.mean(data_ds.values[matched_inds == i]) for i in unique_indices]
-    median_datas = [
-        np.median(data_ds.values[matched_inds == i]) for i in unique_indices
-    ]
+    median_datas = [np.median(data_ds.values[matched_inds == i]) for i in unique_indices]
     std_datas = [np.std(data_ds.values[matched_inds == i]) for i in unique_indices]
     n_datas = [len(data_ds.values[matched_inds == i]) for i in unique_indices]
 
@@ -91,6 +89,6 @@ def match_vectors_indices(base_vector, vector_to_match):
     # Convert back to kilometers.
     distances_km = 6371 * distances
     # Sanity check.
-    print("Maximal distance to matched point: {} km.".format(np.max(distances_km)))
+    print(f"Maximal distance to matched point: {np.max(distances_km)} km.")
 
     return index_array_1d.squeeze()

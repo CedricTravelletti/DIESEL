@@ -1,17 +1,12 @@
-from setuptools import setup
-from setuptools.extension import Extension
-from Cython.Build import cythonize
 import numpy
+from Cython.Build import cythonize
+from setuptools import Extension, find_packages, setup
 
-# Define the extension module
-extensions = [
-    Extension("haversine", ["diesel/haversine.pyx"]),
-]
+extensions = [Extension(name="diesel.utils.haversine", sources=["diesel/utils/haversine.pyx"])]
 
-# Use cythonize on the extension object.
 setup(
-    name="DIESEL",
-    packages=["diesel"],  # Replace with the names of your packages
+    name="diesel",
+    packages=find_packages(),
     ext_modules=cythonize(extensions),
     include_dirs=[numpy.get_include()],
 )

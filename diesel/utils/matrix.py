@@ -1,10 +1,11 @@
 """Matrix operations utilities."""
 
-import numpy as np
 import warnings
+
 import dask.array as da
-from dask.utils import derived_from
+import numpy as np
 import torch
+from dask.utils import derived_from
 
 
 @derived_from(np)
@@ -35,15 +36,10 @@ def cov(m, y=None, rowvar=1, bias=0, ddof=None):
         N = X.shape[0]
         axis = 1
 
-    # check ddof
-    if ddof is None:
-        if bias == 0:
-            ddof = 1
-        else:
-            ddof = 0
+    ddof = 1 if bias == 0 else 0
     fact = float(N - ddof)
     if fact <= 0:
-        warnings.warn("Degrees of freedom <= 0 for slice", RuntimeWarning)
+        warnings.warn("Degrees of freedom <= 0 for slice", RuntimeWarning, stacklevel=2)
         fact = 0.0
 
     if y is not None:
@@ -82,7 +78,8 @@ def cholesky_invert(A, debug_string, CHUNK_REDUCTION_FACTOR=4):
     """
     # Note that the daks cholesky implementation requires square chunks.
     # Hence, to keep chunks of a manageable size, one possible trick is to make
-    # R into a matrix wiht shape divisible by CHUNK_REDUCTION_FACTOR, to have CHUNK_REDUCTION_FACTOR chunks along each
+    # R into a matrix wiht shape divisible by CHUNK_REDUCTION_FACTOR,
+    # to have CHUNK_REDUCTION_FACTOR chunks along each
     # dimension.
     # Appending with identity matrix (in block diag fashion) allows us
     # to recover the original Cholesky decomposition from the one of the
@@ -178,12 +175,7 @@ def cross_covariance(X, Y, bias=False, ddof=None, dtype=None, rowvar=True):
     Y = array(Y, ndmin=2, dtype=dtype)
     """
 
-    if ddof is None:
-        if bias == 0:
-            ddof = 1
-        else:
-            ddof = 0
-
+    ddof = 1 if bias == 0 else 0
     avg_X = torch.mean(X_in, axis=1)
     avg_Y = torch.mean(Y_in, axis=1)
 

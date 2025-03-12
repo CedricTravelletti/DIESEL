@@ -1,10 +1,12 @@
-from .kernels import matern32, squared_exponential, pairwise_euclidean
-from .samplers import SvdSampler, CholeskySampler
+from .kernels import Matern32, Matern52, ExponentialKernel, GaussianKernel, MaternGeneral
+from .samplers import CholeskySampler, SvdSampler
 
 __all__ = [
-    "matern32",
-    "squared_exponential",
-    "pairwise_euclidean",
+    "Matern32",
+    "Matern52",
+    "ExponentialKernel",
+    "GaussianKernel",
+    "MaternGeneral",
     "SvdSampler",
     "CholeskySampler",
 ]
